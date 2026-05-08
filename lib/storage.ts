@@ -4,7 +4,8 @@ export interface CRMEntry {
   business: Business;
   status: "nouveau" | "contacte" | "interesse" | "signe" | "pas_interesse";
   note: string;
-  rappelAt: string | null;  // ISO datetime du prochain rappel
+  rappelAt: string | null;
+  rappelDirection: "je_rappelle" | "ils_rappellent" | null;
   siteCree: boolean;
   addedAt: string;
   updatedAt: string;
@@ -35,6 +36,7 @@ export function addToCRM(business: Business) {
     status: "nouveau",
     note: "",
     rappelAt: null,
+    rappelDirection: null,
     siteCree: false,
     addedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -42,7 +44,7 @@ export function addToCRM(business: Business) {
   localStorage.setItem("prospectai_crm", JSON.stringify(crm));
 }
 
-export function updateCRMEntry(placeId: string, patch: Partial<Pick<CRMEntry, "status" | "note" | "rappelAt" | "siteCree">>) {
+export function updateCRMEntry(placeId: string, patch: Partial<Pick<CRMEntry, "status" | "note" | "rappelAt" | "rappelDirection" | "siteCree">>) {
   const crm = getCRM();
   if (!crm[placeId]) return;
   crm[placeId] = { ...crm[placeId], ...patch, updatedAt: new Date().toISOString() };

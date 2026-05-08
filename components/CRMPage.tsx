@@ -35,7 +35,7 @@ type EntryWithId = CRMEntry & { id: string };
 
 export default function CRMPage() {
   const [crm, setCrm] = useState<Record<string, CRMEntry>>({});
-  const [filterStatus, setFilterStatus] = useState<CRMEntry["status"] | "all">("all");
+  const [filterStatus, setFilterStatus] = useState<CRMEntry["status"] | "all" | "a_rappeler" | "ils_rappellent">("all");
   const [editingNote, setEditingNote] = useState<string | null>(null);
   const [noteValue, setNoteValue] = useState("");
   const [editingRappel, setEditingRappel] = useState<string | null>(null);
@@ -48,11 +48,17 @@ export default function CRMPage() {
     ...e,
     // migration: anciens leads sans ces champs
     rappelAt: e.rappelAt ?? null,
+    rappelDirection: e.rappelDirection ?? null,
     siteCree: e.siteCree ?? false,
     id,
   }));
 
-  const filtered: EntryWithId[] = (filterStatus === "all" ? allEntries : allEntries.filter((e) => e.status === filterStatus))
+  const filtered: EntryWithId[] = (
+    filterStatus === "all" ? allEntries
+    : filterStatus === "a_rappeler" ? allEntries.filter((e) => e.rappelAt && e.rappelDirection === "je_rappelle")
+    : filterStatus === "ils_rappellent" ? allEntries.filter((e) => e.rappelDirection === "ils_rappellent")
+    : allEntries.filter((e) => e.status === filterStatus)
+  )
     .sort((a, b) => {
       // Rappels définis d'abord, du plus proche au plus loin
       if (a.rappelAt && b.rappelAt) return new Date(a.rappelAt).getTime() - new Date(b.rappelAt).getTime();
@@ -61,7 +67,7 @@ export default function CRMPage() {
       return new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime();
     });
 
-  const update = (id: string, patch: Partial<Pick<CRMEntry, "status" | "note" | "rappelAt" | "siteCree">>) => {
+  const update = (id: string, patch: Partial<Pick<CRMEntry, "status" | "note" | "rappelAt" | "rappelDirection" | "siteCree">>) => {
     updateCRMEntry(id, patch);
     reload();
   };
@@ -91,7 +97,7 @@ export default function CRMPage() {
         </p>
       </div>
 
-      {/* Filtres statut */}
+      {/* Filtres */}
       <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
         <button onClick={() => setFilterStatus("all")} style={{
           padding: "7px 14px", borderRadius: 10, border: "1px solid",
@@ -99,6 +105,23 @@ export default function CRMPage() {
           background: filterStatus === "all" ? "rgba(255,255,255,0.08)" : "transparent",
           color: "#e8e8f0", fontSize: 12, fontWeight: 600, cursor: "pointer",
         }}>Tous ({allEntries.length})</button>
+
+        {/* Filtres rappel */}
+        {[
+          { key: "a_rappeler", label: "📞 À rappeler", color: "#60a5fa", bg: "rgba(96,165,250,0.12)", border: "rgba(96,165,250,0.3)", count: allEntries.filter((e) => e.rappelAt && e.rappelDirection === "je_rappelle").length },
+          { key: "ils_rappellent", label: "📲 Ils me rappellent", color: "#a78bfa", bg: "rgba(167,139,250,0.12)", border: "rgba(167,139,250,0.3)", count: allEntries.filter((e) => e.rappelDirection === "ils_rappellent").length },
+        ].map((f) => (
+          <button key={f.key} onClick={() => setFilterStatus(f.key as "a_rappeler" | "ils_rappellent")} style={{
+            padding: "7px 14px", borderRadius: 10, border: "1px solid",
+            borderColor: filterStatus === f.key ? f.border : "rgba(255,255,255,0.07)",
+            background: filterStatus === f.key ? f.bg : "transparent",
+            color: filterStatus === f.key ? f.color : "rgba(255,255,255,0.4)",
+            fontSize: 12, fontWeight: 600, cursor: "pointer",
+          }}>{f.label} ({f.count})</button>
+        ))}
+
+        <div style={{ width: 1, background: "rgba(255,255,255,0.08)", margin: "0 4px" }} />
+
         {stats.map((s) => (
           <button key={s.value} onClick={() => setFilterStatus(s.value)} style={{
             padding: "7px 14px", borderRadius: 10, border: "1px solid",
@@ -224,6 +247,32 @@ export default function CRMPage() {
                       + Fixer une date
                     </button>
                   )}
+                </div>
+
+                {/* Direction rappel */}
+                <div style={{ display: "flex", gap: 8 }}>
+                  {([
+                    { value: "je_rappelle",    label: "📞 Je rappelle",       color: "#60a5fa", bg: "rgba(96,165,250,0.12)",  border: "rgba(96,165,250,0.3)" },
+                    { value: "ils_rappellent", label: "📲 Ils me rappellent", color: "#a78bfa", bg: "rgba(167,139,250,0.12)", border: "rgba(167,139,250,0.3)" },
+                  ] as const).map((opt) => {
+                    const active = entry.rappelDirection === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() => update(entry.id, { rappelDirection: active ? null : opt.value })}
+                        style={{
+                          padding: "5px 12px", borderRadius: 9, border: "1px solid",
+                          borderColor: active ? opt.border : "rgba(255,255,255,0.08)",
+                          background: active ? opt.bg : "transparent",
+                          color: active ? opt.color : "rgba(255,255,255,0.3)",
+                          fontSize: 12, fontWeight: active ? 700 : 400, cursor: "pointer",
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {/* Note */}
