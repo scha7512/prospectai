@@ -62,9 +62,9 @@ export default function Sidebar({
       {/* Navigation */}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {([
-          { v: "search", icon: "🔍", label: "Recherche" },
-          { v: "crm",    icon: "📋", label: "Mon CRM", count: crmCount },
-        ] as const).map(({ v, icon, label, count }) => (
+          { v: "search" as const, icon: "🔍", label: "Recherche", count: undefined as number | undefined },
+          { v: "crm" as const,    icon: "📋", label: "Mon CRM",   count: crmCount },
+        ]).map(({ v, icon, label, count }) => (
           <button key={v} onClick={() => onViewChange(v)} style={{
             display: "flex", alignItems: "center", gap: 10,
             padding: "10px 14px", borderRadius: 12, border: "1px solid",
