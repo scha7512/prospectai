@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { SECTORS, DISTANCES } from "@/lib/constants";
 
 interface SidebarProps {
@@ -17,6 +18,11 @@ interface SidebarProps {
   crmCount: number;
 }
 
+interface SidebarPropsExtra {
+  onSelectAllSectors: () => void;
+  onClearSectors: () => void;
+}
+
 export default function Sidebar({
   selectedSectors,
   onSectorToggle,
@@ -30,7 +36,15 @@ export default function Sidebar({
   view,
   onViewChange,
   crmCount,
-}: SidebarProps) {
+  onSelectAllSectors,
+  onClearSectors,
+}: SidebarProps & SidebarPropsExtra) {
+  const [sectorSearch, setSectorSearch] = useState("");
+  const allSelected = selectedSectors.length === SECTORS.length;
+  const filteredSectors = SECTORS.filter((s) =>
+    s.label.toLowerCase().includes(sectorSearch.toLowerCase())
+  );
+
   return (
     <aside
       style={{
@@ -198,6 +212,7 @@ export default function Sidebar({
 
       {/* Secteurs */}
       <div>
+        {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
             Secteurs
@@ -208,8 +223,52 @@ export default function Sidebar({
             </span>
           )}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          {SECTORS.map((sector) => {
+
+        {/* Barre de recherche */}
+        <input
+          type="text"
+          placeholder="🔎 Rechercher un secteur…"
+          value={sectorSearch}
+          onChange={(e) => setSectorSearch(e.target.value)}
+          style={{
+            width: "100%", padding: "7px 10px", borderRadius: 9, marginBottom: 8,
+            background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+            color: "#e8e8f0", fontSize: 12, outline: "none",
+          }}
+        />
+
+        {/* Tout cocher / Tout décocher */}
+        <button
+          onClick={allSelected ? onClearSectors : onSelectAllSectors}
+          style={{
+            width: "100%", padding: "7px 12px", borderRadius: 10, marginBottom: 8,
+            border: "1px solid",
+            borderColor: allSelected ? "#6366f1" : "rgba(255,255,255,0.1)",
+            background: allSelected ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.03)",
+            color: allSelected ? "#818cf8" : "rgba(255,255,255,0.5)",
+            fontSize: 12, fontWeight: 700, cursor: "pointer", textAlign: "left",
+            display: "flex", alignItems: "center", gap: 8,
+          }}
+        >
+          <span style={{
+            width: 16, height: 16, borderRadius: 4, border: "2px solid",
+            borderColor: allSelected ? "#6366f1" : "rgba(255,255,255,0.2)",
+            background: allSelected ? "#6366f1" : "transparent",
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 10,
+          }}>
+            {allSelected ? "✓" : ""}
+          </span>
+          Tous les secteurs ({SECTORS.length})
+        </button>
+
+        {/* Liste filtrée */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 320, overflowY: "auto" }}>
+          {filteredSectors.length === 0 && (
+            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", textAlign: "center", padding: "10px 0", margin: 0 }}>
+              Aucun secteur trouvé
+            </p>
+          )}
+          {filteredSectors.map((sector) => {
             const active = selectedSectors.includes(sector.type);
             return (
               <button

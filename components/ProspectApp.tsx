@@ -220,6 +220,8 @@ export default function ProspectApp() {
         view={view}
         onViewChange={setView}
         crmCount={addedIds.size}
+        onSelectAllSectors={() => handleFilterChange({ sectors: SECTORS.map((s) => s.type) })}
+        onClearSectors={() => handleFilterChange({ sectors: [] })}
       />
 
       {view === "crm" && <div style={{ flex: 1, minWidth: 0 }}><CRMPage /></div>}
