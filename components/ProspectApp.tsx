@@ -29,7 +29,7 @@ export default function ProspectApp() {
   const [searchState, setSearchState] = useState<SearchState | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"search" | "crm">("search");
+  const [view, setView] = useState<"search" | "crm" | "equipe">("search");
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [session, setSession] = useState<{ username: string; role: "admin" | "telepro" } | null>(null);
 
@@ -237,13 +237,20 @@ export default function ProspectApp() {
           withWebsite: searchState.withWebsiteCount,
         } : null}
         view={view}
-        onViewChange={setView}
+        onViewChange={(v) => setView(v as "search" | "crm" | "equipe")}
         crmCount={addedIds.size}
         onSelectAllSectors={() => handleFilterChange({ sectors: SECTORS.map((s) => s.type) })}
         onClearSectors={() => handleFilterChange({ sectors: [] })}
+        isAdmin={session?.role === "admin"}
       />
 
       {view === "crm" && <div style={{ flex: 1, minWidth: 0 }}><CRMPage /></div>}
+
+      {view === "equipe" && (
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <AdminPanel selectedLeads={searchState?.results || []} />
+        </div>
+      )}
 
       {view === "search" && <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 20 }}>
         {/* Header utilisateur */}
@@ -343,9 +350,6 @@ export default function ProspectApp() {
               </div>
             ) : (
               <>
-                {session?.role === "admin" && (
-                  <AdminPanel selectedLeads={searchState.results} />
-                )}
                 <BusinessTable
                   businesses={searchState.results}
                   onAddToCRM={handleAddToCRM}

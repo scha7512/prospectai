@@ -21,6 +21,7 @@ interface SidebarProps {
 interface SidebarPropsExtra {
   onSelectAllSectors: () => void;
   onClearSectors: () => void;
+  isAdmin?: boolean;
 }
 
 export default function Sidebar({
@@ -38,6 +39,7 @@ export default function Sidebar({
   crmCount,
   onSelectAllSectors,
   onClearSectors,
+  isAdmin,
 }: SidebarProps & SidebarPropsExtra) {
   const [sectorSearch, setSectorSearch] = useState("");
   const allSelected = selectedSectors.length === SECTORS.length;
@@ -76,9 +78,10 @@ export default function Sidebar({
       {/* Navigation */}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {([
-          { v: "search" as const, icon: "🔍", label: "Recherche", count: undefined as number | undefined },
-          { v: "crm" as const,    icon: "📋", label: "Mon CRM",   count: crmCount },
-        ]).map(({ v, icon, label, count }) => (
+          { v: "search" as const, icon: "🔍", label: "Recherche",     count: undefined as number | undefined, adminOnly: false },
+          { v: "crm" as const,    icon: "📋", label: "Mon CRM",       count: crmCount,                        adminOnly: false },
+          { v: "equipe" as const, icon: "👥", label: "Mon équipe",    count: undefined,                       adminOnly: true  },
+        ] as const).filter((item) => !item.adminOnly || isAdmin).map(({ v, icon, label, count }) => (
           <button key={v} onClick={() => onViewChange(v)} style={{
             display: "flex", alignItems: "center", gap: 10,
             padding: "10px 14px", borderRadius: 12, border: "1px solid",
