@@ -1,0 +1,47 @@
+"use client";
+
+import { useState } from "react";
+import NavSidebar from "./NavSidebar";
+import CRMPage from "./CRMPage";
+
+interface Props {
+  session: { userId: string; username: string; role: "admin" | "telepro" };
+  onLogout: () => void;
+}
+
+const NAV = [
+  { id: "crm", icon: "📋", label: "Mes leads" },
+];
+
+const PAGE_TITLES: Record<string, { title: string; sub: string }> = {
+  crm: { title: "Mes leads", sub: "Les prospects qui vous ont été assignés" },
+};
+
+export default function TeleproApp({ session, onLogout }: Props) {
+  const [view, setView] = useState("crm");
+  const page = PAGE_TITLES[view] || PAGE_TITLES.crm;
+
+  return (
+    <div className="layout">
+      <NavSidebar
+        items={NAV}
+        active={view}
+        onSelect={setView}
+        username={session.username}
+        role="telepro"
+        onLogout={onLogout}
+      />
+      <div className="main">
+        <div className="topbar">
+          <div>
+            <div className="page-title">{page.title}</div>
+            <div className="page-sub">{page.sub}</div>
+          </div>
+        </div>
+        <div className="content">
+          <CRMPage />
+        </div>
+      </div>
+    </div>
+  );
+}

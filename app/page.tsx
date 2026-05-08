@@ -1,5 +1,5 @@
-import ProspectApp from "@/components/ProspectApp";
+import AppShell from "@/components/AppShell";
 
 export default function Home() {
-  return <ProspectApp />;
+  return <AppShell />;
 }
