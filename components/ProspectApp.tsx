@@ -5,6 +5,7 @@ import Sidebar from "./Sidebar";
 import { BusinessTable } from "./BusinessCard";
 import SavedSearches from "./SavedSearches";
 import CRMPage from "./CRMPage";
+import CityInput from "./CityInput";
 import { Business } from "@/app/api/search/route";
 import { saveSearch, SavedSearch, addToCRM, getCRM } from "@/lib/storage";
 import { SECTORS } from "@/lib/constants";
@@ -226,30 +227,12 @@ export default function ProspectApp() {
       {view === "search" && <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 20 }}>
         {/* Barre de recherche */}
         <div style={{ display: "flex", gap: 10 }}>
-          <div style={{
-            flex: 1, display: "flex", alignItems: "center", gap: 10,
-            background: "#16161e", border: "1px solid rgba(255,255,255,0.07)",
-            borderRadius: 12, padding: "0 16px",
-          }}>
-            <span style={{ fontSize: 18, opacity: 0.4 }}>📍</span>
-            <input
-              type="text"
-              placeholder="Entrez une ville (ex : Lyon, Paris, Bordeaux…)"
-              value={locationInput}
-              onChange={(e) => { setLocationInput(e.target.value); setResolvedLocation(null); }}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              style={{
-                flex: 1, background: "none", border: "none", outline: "none",
-                color: "#e8e8f0", fontSize: 14, padding: "14px 0",
-              }}
-            />
-            {locationInput && (
-              <button onClick={() => { setLocationInput(""); setResolvedLocation(null); setSearchState(null); }}
-                style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 18, padding: 0 }}>
-                ×
-              </button>
-            )}
-          </div>
+          <CityInput
+            value={locationInput}
+            onChange={(val) => { setLocationInput(val); setResolvedLocation(null); }}
+            onSelect={(s) => setResolvedLocation({ lat: s.lat, lng: s.lng })}
+            onSearch={handleSearch}
+          />
 
           <button
             className="btn-primary"
