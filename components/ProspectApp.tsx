@@ -4,8 +4,9 @@ import { useState } from "react";
 import Sidebar from "./Sidebar";
 import { BusinessTable } from "./BusinessCard";
 import SavedSearches from "./SavedSearches";
+import CRMPage from "./CRMPage";
 import { Business } from "@/app/api/search/route";
-import { saveSearch, SavedSearch } from "@/lib/storage";
+import { saveSearch, SavedSearch, addToCRM, getCRM } from "@/lib/storage";
 import { SECTORS } from "@/lib/constants";
 
 interface SearchState {
@@ -25,6 +26,11 @@ export default function ProspectApp() {
   const [searchState, setSearchState] = useState<SearchState | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<"search" | "crm">("search");
+  const [addedIds, setAddedIds] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    return new Set(Object.keys(getCRM()));
+  });
 
   const handleSectorToggle = (type: string) => {
     setSelectedSectors((prev) =>
@@ -161,6 +167,16 @@ export default function ProspectApp() {
     setResolvedLocation(null);
   };
 
+  const handleAddToCRM = (b: Business) => {
+    addToCRM(b);
+    setAddedIds((prev) => new Set([...prev, b.place_id]));
+  };
+
+  const handleAddAllToCRM = () => {
+    searchState?.results.forEach((b) => addToCRM(b));
+    setAddedIds((prev) => new Set([...prev, ...(searchState?.results.map((b) => b.place_id) || [])]));
+  };
+
   const handleExportCSV = () => {
     if (!searchState?.results.length) return;
     const header = ["Statut", "Nom", "Secteur", "Adresse", "Téléphone", "Site web"];
@@ -200,9 +216,14 @@ export default function ProspectApp() {
           noWebsite: searchState.noWebsiteCount,
           withWebsite: searchState.withWebsiteCount,
         } : null}
+        view={view}
+        onViewChange={setView}
+        crmCount={addedIds.size}
       />
 
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 20 }}>
+      {view === "crm" && <div style={{ flex: 1, minWidth: 0 }}><CRMPage /></div>}
+
+      {view === "search" && <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 20 }}>
         {/* Barre de recherche */}
         <div style={{ display: "flex", gap: 10 }}>
           <div style={{
@@ -302,7 +323,12 @@ export default function ProspectApp() {
                 </p>
               </div>
             ) : (
-              <BusinessTable businesses={searchState.results} />
+              <BusinessTable
+                businesses={searchState.results}
+                onAddToCRM={handleAddToCRM}
+                onAddAllToCRM={handleAddAllToCRM}
+                addedIds={addedIds}
+              />
             )}
           </>
         )}
@@ -317,6 +343,7 @@ export default function ProspectApp() {
           </div>
         )}
       </div>
+      }
     </div>
   );
 }

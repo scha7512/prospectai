@@ -12,6 +12,9 @@ interface SidebarProps {
   maxLeads: number;
   onMaxLeadsChange: (n: number) => void;
   stats: { total: number; noWebsite: number; withWebsite: number } | null;
+  view: "search" | "crm";
+  onViewChange: (v: "search" | "crm") => void;
+  crmCount: number;
 }
 
 export default function Sidebar({
@@ -24,6 +27,9 @@ export default function Sidebar({
   maxLeads,
   onMaxLeadsChange,
   stats,
+  view,
+  onViewChange,
+  crmCount,
 }: SidebarProps) {
   return (
     <aside
@@ -51,6 +57,31 @@ export default function Sidebar({
           <div style={{ fontWeight: 700, fontSize: 16, color: "#e8e8f0" }}>ProspectAI</div>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>Prospection locale</div>
         </div>
+      </div>
+
+      {/* Navigation */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {([
+          { v: "search", icon: "🔍", label: "Recherche" },
+          { v: "crm",    icon: "📋", label: "Mon CRM", count: crmCount },
+        ] as const).map(({ v, icon, label, count }) => (
+          <button key={v} onClick={() => onViewChange(v)} style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "10px 14px", borderRadius: 12, border: "1px solid",
+            borderColor: view === v ? "#6366f1" : "rgba(255,255,255,0.07)",
+            background: view === v ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.02)",
+            color: view === v ? "#818cf8" : "rgba(255,255,255,0.5)",
+            fontSize: 14, fontWeight: view === v ? 600 : 400, cursor: "pointer",
+          }}>
+            <span>{icon}</span>
+            <span style={{ flex: 1 }}>{label}</span>
+            {count !== undefined && count > 0 && (
+              <span style={{ background: "#6366f1", color: "white", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>
+                {count}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* Stats */}

@@ -1,8 +1,10 @@
 import { Business } from "@/app/api/search/route";
 
 export interface CRMEntry {
+  business: Business;
   status: "nouveau" | "contacte" | "interesse" | "signe" | "pas_interesse";
   note: string;
+  addedAt: string;
   updatedAt: string;
 }
 
@@ -23,9 +25,23 @@ export function getCRM(): Record<string, CRMEntry> {
   catch { return {}; }
 }
 
-export function setCRMEntry(placeId: string, entry: CRMEntry) {
+export function addToCRM(business: Business) {
   const crm = getCRM();
-  crm[placeId] = entry;
+  if (crm[business.place_id]) return; // déjà présent
+  crm[business.place_id] = {
+    business,
+    status: "nouveau",
+    note: "",
+    addedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  localStorage.setItem("prospectai_crm", JSON.stringify(crm));
+}
+
+export function updateCRMEntry(placeId: string, patch: Partial<Pick<CRMEntry, "status" | "note">>) {
+  const crm = getCRM();
+  if (!crm[placeId]) return;
+  crm[placeId] = { ...crm[placeId], ...patch, updatedAt: new Date().toISOString() };
   localStorage.setItem("prospectai_crm", JSON.stringify(crm));
 }
 
