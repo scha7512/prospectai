@@ -237,7 +237,7 @@ export default function ProspectApp() {
           withWebsite: searchState.withWebsiteCount,
         } : null}
         view={view}
-        onViewChange={(v) => setView(v as "search" | "crm" | "equipe")}
+        onViewChange={setView}
         crmCount={addedIds.size}
         onSelectAllSectors={() => handleFilterChange({ sectors: SECTORS.map((s) => s.type) })}
         onClearSectors={() => handleFilterChange({ sectors: [] })}

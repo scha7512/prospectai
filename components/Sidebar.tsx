@@ -13,8 +13,8 @@ interface SidebarProps {
   maxLeads: number;
   onMaxLeadsChange: (n: number) => void;
   stats: { total: number; noWebsite: number; withWebsite: number } | null;
-  view: "search" | "crm";
-  onViewChange: (v: "search" | "crm") => void;
+  view: "search" | "crm" | "equipe";
+  onViewChange: (v: "search" | "crm" | "equipe") => void;
   crmCount: number;
 }
 
