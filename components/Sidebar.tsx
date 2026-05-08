@@ -1,82 +1,165 @@
 "use client";
 
-import { SECTORS, RADIUS_OPTIONS } from "@/lib/constants";
+import { SECTORS, DISTANCES } from "@/lib/constants";
 
 interface SidebarProps {
   selectedSectors: string[];
   onSectorToggle: (type: string) => void;
-  radius: string;
-  onRadiusChange: (r: string) => void;
-  stats: { total: number; noWebsite: number } | null;
-  isSearching: boolean;
+  distance: string;
+  onDistanceChange: (d: string) => void;
+  websiteFilter: string;
+  onWebsiteFilterChange: (f: string) => void;
+  maxLeads: number;
+  onMaxLeadsChange: (n: number) => void;
+  stats: { total: number; noWebsite: number; withWebsite: number } | null;
 }
 
 export default function Sidebar({
   selectedSectors,
   onSectorToggle,
-  radius,
-  onRadiusChange,
+  distance,
+  onDistanceChange,
+  websiteFilter,
+  onWebsiteFilterChange,
+  maxLeads,
+  onMaxLeadsChange,
   stats,
-  isSearching,
 }: SidebarProps) {
   return (
-    <aside className="w-72 shrink-0 flex flex-col gap-4 p-4 glass rounded-2xl h-fit sticky top-6">
+    <aside
+      style={{
+        width: 260,
+        flexShrink: 0,
+        display: "flex",
+        flexDirection: "column",
+        gap: 24,
+        position: "sticky",
+        top: 24,
+        maxHeight: "calc(100vh - 48px)",
+        overflowY: "auto",
+      }}
+    >
       {/* Logo */}
-      <div className="flex items-center gap-2 pb-3 border-b border-white/10">
-        <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center">
-          <svg className="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.347.416A48.001 48.001 0 0112 20c-.834 0-1.655-.048-2.464-.14l-.347-.416z"
-            />
-          </svg>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{
+          width: 36, height: 36, borderRadius: 10,
+          background: "linear-gradient(135deg, #6366f1, #a855f7)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 18,
+        }}>🔍</div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 16, color: "#e8e8f0" }}>ProspectAI</div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>Prospection locale</div>
         </div>
-        <span className="font-bold text-lg gradient-text">ProspectAI</span>
       </div>
 
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-2 gap-2">
-          <div className="glass rounded-xl p-3 text-center">
-            <p className="text-2xl font-bold text-white">{stats.total}</p>
-            <p className="text-xs text-white/40 mt-0.5">Trouvés</p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div className="card" style={{ padding: "12px", textAlign: "center" }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: "#6366f1" }}>{stats.noWebsite}</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>Sans site</div>
           </div>
-          <div className="glass rounded-xl p-3 text-center">
-            <p className="text-2xl font-bold text-indigo-400">{stats.noWebsite}</p>
-            <p className="text-xs text-white/40 mt-0.5">Sans site</p>
+          <div className="card" style={{ padding: "12px", textAlign: "center" }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: "#e8e8f0" }}>{stats.total}</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>Total</div>
           </div>
         </div>
       )}
 
-      {isSearching && (
-        <div className="glass rounded-xl p-3 flex items-center gap-2">
-          <div className="flex gap-1">
-            {[0, 1, 2].map((i) => (
-              <span
-                key={i}
-                className="w-1.5 h-1.5 rounded-full bg-indigo-400"
-                style={{ animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite` }}
-              />
-            ))}
-          </div>
-          <p className="text-xs text-white/50">Recherche en cours…</p>
-        </div>
-      )}
-
-      {/* Rayon */}
+      {/* Nombre de leads */}
       <div>
-        <p className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-2">Rayon</p>
-        <div className="grid grid-cols-3 gap-1.5">
-          {RADIUS_OPTIONS.map((opt) => (
+        <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
+          Nombre de leads
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={maxLeads}
+            onChange={(e) => onMaxLeadsChange(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
+            style={{
+              width: 80, padding: "8px 12px", borderRadius: 10,
+              background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)",
+              color: "#e8e8f0", fontSize: 20, fontWeight: 700, textAlign: "center", outline: "none",
+            }}
+          />
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", lineHeight: 1.4 }}>
+            entreprises<br />à trouver
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+          {[5, 10, 25, 50].map((n) => (
+            <button key={n} onClick={() => onMaxLeadsChange(n)}
+              style={{
+                flex: 1, padding: "5px 0", borderRadius: 8, border: "1px solid",
+                borderColor: maxLeads === n ? "#6366f1" : "rgba(255,255,255,0.07)",
+                background: maxLeads === n ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.02)",
+                color: maxLeads === n ? "#818cf8" : "rgba(255,255,255,0.4)",
+                fontSize: 12, fontWeight: 600, cursor: "pointer",
+              }}>
+              {n}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Filtre site web */}
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
+          Présence web
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {[
+            { value: "no_website", label: "Sans site web", icon: "🚫", desc: "Prospects à contacter" },
+            { value: "with_website", label: "Avec site web", icon: "✅", desc: "Déjà en ligne" },
+            { value: "all", label: "Tous", icon: "📋", desc: "Voir tout" },
+          ].map((opt) => (
             <button
               key={opt.value}
-              onClick={() => onRadiusChange(opt.value)}
-              className={`py-1.5 rounded-lg text-xs font-medium transition-all ${
-                radius === opt.value
-                  ? "bg-indigo-500 text-white accent-glow"
-                  : "glass text-white/50 hover:text-white/80"
-              }`}
+              onClick={() => onWebsiteFilterChange(opt.value)}
+              style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "10px 12px", borderRadius: 10, border: "1px solid",
+                borderColor: websiteFilter === opt.value ? "#6366f1" : "rgba(255,255,255,0.07)",
+                background: websiteFilter === opt.value ? "rgba(99,102,241,0.12)" : "rgba(255,255,255,0.02)",
+                cursor: "pointer", textAlign: "left", transition: "all 0.15s",
+              }}
             >
-              {opt.label}
+              <span style={{ fontSize: 16 }}>{opt.icon}</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: websiteFilter === opt.value ? "#818cf8" : "#e8e8f0" }}>
+                  {opt.label}
+                </div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>{opt.desc}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Zone de recherche */}
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
+          Zone
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {DISTANCES.map((d) => (
+            <button
+              key={d.value}
+              onClick={() => onDistanceChange(d.value)}
+              style={{
+                flex: 1, padding: "8px 4px", borderRadius: 10, border: "1px solid",
+                borderColor: distance === d.value ? "#6366f1" : "rgba(255,255,255,0.07)",
+                background: distance === d.value ? "rgba(99,102,241,0.12)" : "rgba(255,255,255,0.02)",
+                cursor: "pointer", transition: "all 0.15s",
+              }}
+            >
+              <div style={{ fontSize: 12, fontWeight: 600, color: distance === d.value ? "#818cf8" : "#e8e8f0" }}>
+                {d.label}
+              </div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>{d.sub}</div>
             </button>
           ))}
         </div>
@@ -84,25 +167,36 @@ export default function Sidebar({
 
       {/* Secteurs */}
       <div>
-        <p className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-2">Secteur</p>
-        <div className="flex flex-col gap-1">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            Secteurs
+          </div>
+          {selectedSectors.length > 0 && (
+            <span style={{ fontSize: 11, background: "#6366f1", color: "white", borderRadius: 10, padding: "1px 7px", fontWeight: 600 }}>
+              {selectedSectors.length}
+            </span>
+          )}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           {SECTORS.map((sector) => {
             const active = selectedSectors.includes(sector.type);
             return (
               <button
                 key={sector.type}
                 onClick={() => onSectorToggle(sector.type)}
-                className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all ${
-                  active
-                    ? "bg-indigo-500/20 border border-indigo-500/40 text-indigo-300"
-                    : "glass text-white/50 hover:text-white/80 glass-hover"
-                }`}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "8px 12px", borderRadius: 10, border: "1px solid",
+                  borderColor: active ? "#6366f1" : "rgba(255,255,255,0.06)",
+                  background: active ? "rgba(99,102,241,0.12)" : "transparent",
+                  cursor: "pointer", transition: "all 0.15s", textAlign: "left",
+                }}
               >
-                <span className="text-base">{sector.icon}</span>
-                <span className="flex-1 text-left">{sector.label}</span>
-                {active && (
-                  <span className="w-2 h-2 rounded-full bg-indigo-400 shrink-0" />
-                )}
+                <span style={{ fontSize: 15 }}>{sector.icon}</span>
+                <span style={{ flex: 1, fontSize: 13, fontWeight: active ? 600 : 400, color: active ? "#818cf8" : "rgba(255,255,255,0.6)" }}>
+                  {sector.label}
+                </span>
+                {active && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#6366f1", flexShrink: 0 }} />}
               </button>
             );
           })}

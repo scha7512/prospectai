@@ -1,120 +1,157 @@
 "use client";
 
 import { Business } from "@/app/api/search/route";
-import { MapPin, Phone, Clock, Tag, Mail, ExternalLink } from "lucide-react";
+import { useState } from "react";
+import CRMCell from "./CRMCell";
 
 const TYPE_LABELS: Record<string, string> = {
-  restaurant: "Restaurant",
-  cafe: "Café",
-  bar: "Bar",
-  bakery: "Boulangerie",
-  beauty_salon: "Salon de beauté",
-  hair_care: "Coiffeur",
-  gym: "Salle de sport",
-  laundry: "Pressing/Laverie",
-  clothing_store: "Vêtements",
-  pharmacy: "Pharmacie",
-  doctor: "Médecin",
-  dentist: "Dentiste",
-  car_repair: "Garage",
-  plumber: "Plombier",
-  electrician: "Électricien",
-  locksmith: "Serrurier",
-  florist: "Fleuriste",
-  lodging: "Hôtel",
-  real_estate_agency: "Agence immo",
+  restaurant: "Restaurant", cafe: "Café", bar: "Bar", bakery: "Boulangerie",
+  beauty_salon: "Salon de beauté", hair_care: "Coiffeur", gym: "Salle de sport",
+  laundry: "Laverie", clothing_store: "Vêtements", pharmacy: "Pharmacie",
+  doctor: "Médecin", dentist: "Dentiste", car_repair: "Garage",
+  plumber: "Plombier", electrician: "Électricien", locksmith: "Serrurier",
+  florist: "Fleuriste", lodging: "Hôtel", real_estate_agency: "Agence immo",
   accounting: "Comptable",
 };
 
-function getMainType(types: string[]): string {
-  for (const t of types) {
-    if (TYPE_LABELS[t]) return TYPE_LABELS[t];
-  }
-  return types[0]?.replace(/_/g, " ") || "Entreprise";
-}
+export function BusinessTable({ businesses }: { businesses: Business[] }) {
+  const [copied, setCopied] = useState<string | null>(null);
 
-
-interface Props {
-  business: Business;
-  index: number;
-}
-
-export default function BusinessCard({ business, index }: Props) {
-  const handleCopyPhone = () => {
-    if (business.phone) navigator.clipboard.writeText(business.phone);
+  const copyPhone = (phone: string, id: string) => {
+    navigator.clipboard.writeText(phone);
+    setCopied(id);
+    setTimeout(() => setCopied(null), 1500);
   };
 
-  const handleMaps = () => {
-    window.open(
-      `https://www.openstreetmap.org/?mlat=${business.lat}&mlon=${business.lng}&zoom=17`,
-      "_blank"
-    );
+  const openMaps = (b: Business) => {
+    const query = encodeURIComponent(`${b.name} ${b.address}`);
+    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "_blank");
   };
 
   return (
-    <div
-      className="glass glass-hover rounded-2xl p-5 flex flex-col gap-3 transition-all duration-200 slide-up cursor-default"
-      style={{ animationDelay: `${index * 40}ms` }}
-    >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h3 className="font-semibold text-white text-base leading-tight">{business.name}</h3>
-          <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-indigo-500/15 text-indigo-300 text-xs">
-            <Tag size={10} />
-            {getMainType(business.types)}
-          </span>
-        </div>
-        <span className="shrink-0 px-2 py-0.5 rounded-lg bg-red-500/15 text-red-400 text-xs font-medium border border-red-500/20">
-          Sans site web
-        </span>
-      </div>
+    <div style={{ overflowX: "auto", borderRadius: 14, border: "1px solid rgba(255,255,255,0.07)" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <thead>
+          <tr style={{ background: "rgba(255,255,255,0.04)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+            {["CRM", "Statut", "Nom", "Secteur", "Adresse", "Téléphone", "Site web", "Actions"].map((h) => (
+              <th key={h} style={{
+                padding: "12px 16px", textAlign: "left", fontWeight: 600,
+                fontSize: 11, color: "rgba(255,255,255,0.4)", textTransform: "uppercase",
+                letterSpacing: "0.06em", whiteSpace: "nowrap",
+              }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {businesses.map((b, i) => (
+            <tr
+              key={b.place_id}
+              className="fade-up"
+              style={{
+                borderBottom: "1px solid rgba(255,255,255,0.04)",
+                background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.015)",
+                animationDelay: `${i * 20}ms`,
+                transition: "background 0.1s",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(99,102,241,0.06)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.015)")}
+            >
+              {/* CRM */}
+              <td style={{ padding: "10px 16px" }}>
+                <CRMCell placeId={b.place_id} />
+              </td>
 
-      {/* Info rows */}
-      <div className="flex flex-col gap-1.5 text-sm text-white/50">
-        {business.address && (
-          <div className="flex items-start gap-2">
-            <MapPin size={13} className="mt-0.5 shrink-0 text-white/30" />
-            <span className="leading-snug">{business.address}</span>
-          </div>
-        )}
-        {business.phone && (
-          <div className="flex items-center gap-2">
-            <Phone size={13} className="shrink-0 text-white/30" />
-            <span className="font-medium text-white/70">{business.phone}</span>
-          </div>
-        )}
-        {business.email && (
-          <div className="flex items-center gap-2">
-            <Mail size={13} className="shrink-0 text-white/30" />
-            <span className="font-medium text-white/70 truncate">{business.email}</span>
-          </div>
-        )}
-        {business.opening_hours_raw && (
-          <div className="flex items-start gap-2">
-            <Clock size={13} className="mt-0.5 shrink-0 text-white/30" />
-            <span className="text-white/40 text-xs leading-snug">{business.opening_hours_raw}</span>
-          </div>
-        )}
-      </div>
+              {/* Statut */}
+              <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
+                {b.isOpen === true && (
+                  <span style={{ padding: "3px 8px", borderRadius: 6, background: "rgba(34,197,94,0.12)", color: "#4ade80", fontSize: 11, fontWeight: 600, border: "1px solid rgba(34,197,94,0.2)" }}>
+                    🟢 Ouvert
+                  </span>
+                )}
+                {b.isOpen === false && (
+                  <span style={{ padding: "3px 8px", borderRadius: 6, background: "rgba(251,146,60,0.12)", color: "#fb923c", fontSize: 11, fontWeight: 600, border: "1px solid rgba(251,146,60,0.2)" }}>
+                    🔴 À rappeler
+                  </span>
+                )}
+                {b.isOpen === null && (
+                  <span style={{ padding: "3px 8px", borderRadius: 6, background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.3)", fontSize: 11, fontWeight: 500, border: "1px solid rgba(255,255,255,0.08)" }}>
+                    ⚪ Inconnu
+                  </span>
+                )}
+              </td>
 
-      {/* Actions */}
-      <div className="flex gap-2 pt-1">
-        <button
-          onClick={handleMaps}
-          className="flex-1 py-2 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 text-xs font-medium transition-colors border border-indigo-500/20 flex items-center justify-center gap-1"
-        >
-          <ExternalLink size={12} /> Voir sur Maps
-        </button>
-        {business.phone && (
-          <button
-            onClick={handleCopyPhone}
-            className="flex-1 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white/80 text-xs font-medium transition-colors border border-white/10"
-          >
-            Copier le tél.
-          </button>
-        )}
-      </div>
+              {/* Nom */}
+              <td style={{ padding: "12px 16px", fontWeight: 600, color: "#e8e8f0", whiteSpace: "nowrap", maxWidth: 200 }}>
+                {b.name}
+              </td>
+
+              {/* Secteur */}
+              <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
+                <span style={{
+                  padding: "2px 8px", borderRadius: 6,
+                  background: "rgba(99,102,241,0.12)", color: "#818cf8", fontSize: 11, fontWeight: 500,
+                }}>
+                  {TYPE_LABELS[b.types[0]] || b.types[0]}
+                </span>
+              </td>
+
+              {/* Adresse */}
+              <td style={{ padding: "12px 16px", color: "rgba(255,255,255,0.5)", maxWidth: 220 }}>
+                <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {b.address || "—"}
+                </span>
+              </td>
+
+              {/* Téléphone */}
+              <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
+                {b.phone ? (
+                  <button
+                    onClick={() => copyPhone(b.phone!, b.place_id)}
+                    title="Cliquer pour copier"
+                    style={{
+                      background: "none", border: "none", cursor: "pointer",
+                      color: copied === b.place_id ? "#4ade80" : "rgba(255,255,255,0.75)",
+                      fontWeight: 500, fontSize: 13, padding: 0, display: "flex", alignItems: "center", gap: 5,
+                    }}
+                  >
+                    {copied === b.place_id ? "✓ Copié" : b.phone}
+                  </button>
+                ) : <span style={{ color: "rgba(255,255,255,0.2)" }}>—</span>}
+              </td>
+
+              {/* Site web */}
+              <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
+                {b.hasWebsite && b.website ? (
+                  <a href={b.website} target="_blank" rel="noopener noreferrer"
+                    style={{ color: "#4ade80", fontSize: 12, textDecoration: "none" }}>
+                    ✓ Voir le site
+                  </a>
+                ) : (
+                  <span style={{
+                    padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                    background: "rgba(239,68,68,0.1)", color: "#f87171", border: "1px solid rgba(239,68,68,0.2)",
+                  }}>✗ Aucun</span>
+                )}
+              </td>
+
+              {/* Actions */}
+              <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
+                <button
+                  onClick={() => openMaps(b)}
+                  style={{
+                    padding: "5px 12px", borderRadius: 8,
+                    background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.2)",
+                    color: "#818cf8", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  📍 Google Maps
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
+

@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-// Overpass API (OpenStreetMap) — 100% gratuit, aucune clé
-const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+import { isOpenNow } from "@/lib/openingHours";
 
 export interface Business {
   place_id: string;
@@ -13,114 +11,154 @@ export interface Business {
   lng: number;
   opening_hours_raw?: string;
   email?: string;
+  hasWebsite: boolean;
+  website?: string;
+  isOpen: boolean | null; // null = horaires inconnus
 }
 
-// Mapping des types secteur vers les tags OSM
-const OSM_TAGS: Record<string, string[]> = {
-  restaurant:        ['amenity=restaurant'],
-  cafe:              ['amenity=cafe'],
-  bar:               ['amenity=bar', 'amenity=pub'],
-  bakery:            ['shop=bakery'],
-  beauty_salon:      ['shop=beauty'],
-  hair_care:         ['shop=hairdresser'],
-  gym:               ['leisure=fitness_centre', 'leisure=sports_centre'],
-  laundry:           ['shop=laundry', 'shop=dry_cleaning'],
-  clothing_store:    ['shop=clothes'],
-  pharmacy:          ['amenity=pharmacy'],
-  doctor:            ['amenity=doctors'],
-  dentist:           ['amenity=dentist'],
-  car_repair:        ['shop=car_repair'],
-  plumber:           ['craft=plumber'],
-  electrician:       ['craft=electrician'],
-  locksmith:         ['craft=locksmith'],
-  florist:           ['shop=florist'],
-  lodging:           ['tourism=hotel', 'tourism=guest_house', 'tourism=bed_and_breakfast'],
-  real_estate_agency:['office=estate_agent'],
-  accounting:        ['office=accountant'],
+const SECTOR_QUERIES: Record<string, string> = {
+  restaurant:         "restaurant",
+  cafe:               "café",
+  bar:                "bar",
+  bakery:             "boulangerie",
+  beauty_salon:       "salon de beauté",
+  hair_care:          "coiffeur",
+  gym:                "salle de sport",
+  laundry:            "laverie",
+  clothing_store:     "magasin vêtements",
+  pharmacy:           "pharmacie",
+  doctor:             "médecin",
+  dentist:            "dentiste",
+  car_repair:         "garage automobile",
+  plumber:            "plombier",
+  electrician:        "électricien",
+  locksmith:          "serrurier",
+  florist:            "fleuriste",
+  lodging:            "hôtel",
+  real_estate_agency: "agence immobilière",
+  accounting:         "comptable",
 };
 
-function buildOverpassQuery(lat: number, lng: number, radius: number, osmTags: string[]): string {
-  const tagFilters = osmTags.map((tag) => {
-    const [key, value] = tag.split("=");
-    return `
-      node["${key}"="${value}"](around:${radius},${lat},${lng});
-      way["${key}"="${value}"](around:${radius},${lat},${lng});
-    `;
-  }).join("");
+const RADIUS_MAP: Record<string, number> = {
+  proche: 2000,
+  ville: 5000,
+  region: 15000,
+};
 
-  return `
-    [out:json][timeout:25];
-    (
-      ${tagFilters}
-    );
-    out center tags;
-  `;
+async function fetchNominatim(query: string, lat: number, lng: number, radius: number): Promise<NominatimResult[]> {
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+  url.searchParams.set("q", query);
+  url.searchParams.set("format", "jsonv2");
+  url.searchParams.set("limit", "50");
+  url.searchParams.set("viewbox", buildViewbox(lat, lng, radius));
+  url.searchParams.set("bounded", "1");
+  url.searchParams.set("addressdetails", "1");
+  url.searchParams.set("extratags", "1");
+  url.searchParams.set("accept-language", "fr");
+
+  const res = await fetch(url.toString(), {
+    headers: { "User-Agent": "ProspectAI/1.0 contact@prospectai.app", "Accept": "application/json" },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error("Nominatim error");
+  return res.json();
 }
 
-function formatAddress(tags: Record<string, string>): string {
-  const parts = [
-    tags["addr:housenumber"],
-    tags["addr:street"],
-    tags["addr:postcode"],
-    tags["addr:city"],
+function parseResult(item: NominatimResult, type: string): Business | null {
+  if (!item.display_name || !item.lat || !item.lon) return null;
+  const extra = item.extratags || {};
+  const website = extra.website || extra["contact:website"];
+  const phone = extra.phone || extra["contact:phone"] || extra["contact:mobile"];
+  if (!phone) return null; // exclure sans téléphone
+
+  const addr = item.address || {};
+  const addressParts = [
+    addr.house_number, addr.road, addr.postcode,
+    addr.city || addr.town || addr.village,
   ].filter(Boolean);
-  return parts.join(" ") || tags["addr:full"] || "";
+
+  return {
+    place_id: `nom-${item.place_id}`,
+    name: item.name || item.display_name.split(",")[0],
+    address: addressParts.join(" ") || item.display_name.split(",").slice(0, 3).join(", "),
+    phone,
+    email: extra.email || extra["contact:email"],
+    types: [type],
+    lat: parseFloat(item.lat),
+    lng: parseFloat(item.lon),
+    opening_hours_raw: extra.opening_hours,
+    hasWebsite: !!website,
+    website,
+    isOpen: isOpenNow(extra.opening_hours),
+  };
 }
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const location = searchParams.get("location") || "";
-  const radius = searchParams.get("radius") || "5000";
+  const distance = searchParams.get("distance") || "ville";
   const type = searchParams.get("type") || "restaurant";
+  const websiteFilter = searchParams.get("websiteFilter") || "no_website";
+  const maxLeads = Math.min(parseInt(searchParams.get("maxLeads") || "20"), 100);
 
-  if (!location) {
-    return NextResponse.json({ error: "Location required" }, { status: 400 });
-  }
+  if (!location) return NextResponse.json({ error: "Location required" }, { status: 400 });
 
   const [lat, lng] = location.split(",").map(Number);
-  const osmTags = OSM_TAGS[type] || [`amenity=${type}`];
+  const baseRadius = RADIUS_MAP[distance] || 5000;
+  const query = SECTOR_QUERIES[type] || type;
 
-  const query = buildOverpassQuery(lat, lng, parseInt(radius), osmTags);
-
-  const res = await fetch(OVERPASS_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `data=${encodeURIComponent(query)}`,
-  });
-
-  if (!res.ok) {
-    return NextResponse.json({ error: "Overpass API error" }, { status: 502 });
+  // Tente avec rayon de base, puis double si pas assez de résultats
+  let allRaw: NominatimResult[] = [];
+  try {
+    allRaw = await fetchNominatim(query, lat, lng, baseRadius);
+    if (allRaw.length < maxLeads * 2) {
+      const wider = await fetchNominatim(query, lat, lng, baseRadius * 3);
+      const existingIds = new Set(allRaw.map((r) => r.place_id));
+      allRaw.push(...wider.filter((r) => !existingIds.has(r.place_id)));
+    }
+  } catch {
+    return NextResponse.json({ error: "Erreur de recherche. Réessayez." }, { status: 502 });
   }
 
-  const data = await res.json();
-  const elements: Record<string, unknown>[] = data.elements || [];
+  const businesses: Business[] = allRaw
+    .map((item) => parseResult(item, type))
+    .filter((b): b is Business => b !== null);
 
-  // Garder seulement ceux SANS website dans les tags OSM
-  const noWebsite: Business[] = elements
-    .filter((el) => {
-      const tags = (el.tags as Record<string, string>) || {};
-      return !tags.website && !tags["contact:website"] && tags.name;
-    })
-    .map((el) => {
-      const tags = (el.tags as Record<string, string>) || {};
-      const center = (el.center as { lat: number; lon: number }) || el;
-      return {
-        place_id: `osm-${el.type}-${el.id}`,
-        name: tags.name,
-        address: formatAddress(tags),
-        phone: tags.phone || tags["contact:phone"],
-        email: tags.email || tags["contact:email"],
-        types: [type],
-        lat: (center as { lat: number }).lat as number,
-        lng: (center as { lon: number }).lon as number,
-        opening_hours_raw: tags.opening_hours,
-      };
-    });
+  const websiteFiltered = businesses.filter((b) => {
+    if (websiteFilter === "no_website") return !b.hasWebsite;
+    if (websiteFilter === "with_website") return b.hasWebsite;
+    return true;
+  });
+
+  // Trier : ouverts en premier, puis horaires inconnus, puis fermés
+  const open = websiteFiltered.filter((b) => b.isOpen === true);
+  const unknown = websiteFiltered.filter((b) => b.isOpen === null);
+  const closed = websiteFiltered.filter((b) => b.isOpen === false);
+  const sorted = [...open, ...unknown, ...closed];
+
+  const results = sorted.slice(0, maxLeads);
 
   return NextResponse.json({
-    results: noWebsite,
-    next_page_token: null,
-    total_found: elements.length,
-    no_website_count: noWebsite.length,
+    results,
+    total_found: businesses.length,
+    no_website_count: businesses.filter((b) => !b.hasWebsite).length,
+    with_website_count: businesses.filter((b) => b.hasWebsite).length,
+    open_count: open.length,
+    closed_count: closed.length,
   });
+}
+
+function buildViewbox(lat: number, lng: number, radiusMeters: number): string {
+  const deg = radiusMeters / 111000;
+  return `${lng - deg},${lat + deg},${lng + deg},${lat - deg}`;
+}
+
+interface NominatimResult {
+  place_id: number;
+  lat: string;
+  lon: string;
+  display_name: string;
+  name?: string;
+  address?: Record<string, string>;
+  extratags?: Record<string, string>;
 }

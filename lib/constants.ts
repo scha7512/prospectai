@@ -1,12 +1,12 @@
 export const SECTORS = [
   { type: "restaurant", label: "Restaurant", icon: "🍽️" },
   { type: "cafe", label: "Café", icon: "☕" },
-  { type: "bar", label: "Bar", icon: "🍺" },
+  { type: "bar", label: "Bar / Pub", icon: "🍺" },
   { type: "bakery", label: "Boulangerie", icon: "🥐" },
   { type: "beauty_salon", label: "Salon de beauté", icon: "💅" },
   { type: "hair_care", label: "Coiffeur", icon: "✂️" },
   { type: "gym", label: "Salle de sport", icon: "🏋️" },
-  { type: "laundry", label: "Pressing/Laverie", icon: "👕" },
+  { type: "laundry", label: "Laverie", icon: "👕" },
   { type: "clothing_store", label: "Vêtements", icon: "🛍️" },
   { type: "pharmacy", label: "Pharmacie", icon: "💊" },
   { type: "doctor", label: "Médecin", icon: "🩺" },
@@ -21,11 +21,8 @@ export const SECTORS = [
   { type: "accounting", label: "Comptable", icon: "📊" },
 ];
 
-export const RADIUS_OPTIONS = [
-  { value: "1000", label: "1 km" },
-  { value: "2000", label: "2 km" },
-  { value: "5000", label: "5 km" },
-  { value: "10000", label: "10 km" },
-  { value: "20000", label: "20 km" },
-  { value: "50000", label: "50 km" },
+export const DISTANCES = [
+  { value: "proche", label: "Proche", sub: "~2 km" },
+  { value: "ville", label: "Ville", sub: "~5 km" },
+  { value: "region", label: "Large", sub: "~15 km" },
 ];

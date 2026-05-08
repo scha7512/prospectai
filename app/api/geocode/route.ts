@@ -1,25 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Nominatim = OpenStreetMap geocoder, 100% gratuit, aucune clé requise
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const address = searchParams.get("address") || "";
 
   if (!address) return NextResponse.json({ error: "Address required" }, { status: 400 });
 
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&addressdetails=1`;
-  const res = await fetch(url, {
-    headers: { "User-Agent": "ProspectAI/1.0 (prospectai-app)" },
-  });
-  const data = await res.json();
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&countrycodes=fr,be,ch,lu&accept-language=fr`;
 
-  if (!data.length) {
-    return NextResponse.json({ error: "Localisation introuvable" }, { status: 404 });
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "ProspectAI/1.0 contact@prospectai.app",
+      "Accept": "application/json",
+      "Accept-Language": "fr",
+    },
+    next: { revalidate: 0 },
+  });
+
+  if (!res.ok) {
+    return NextResponse.json({ error: "Erreur géocodage" }, { status: 502 });
   }
 
+  const data = await res.json();
+
+  if (!Array.isArray(data) || data.length === 0) {
+    return NextResponse.json({ error: "Ville introuvable. Essayez avec le nom complet (ex: Lyon, France)" }, { status: 404 });
+  }
+
+  const result = data[0];
   return NextResponse.json({
-    lat: parseFloat(data[0].lat),
-    lng: parseFloat(data[0].lon),
-    formatted: data[0].display_name,
+    lat: parseFloat(result.lat),
+    lng: parseFloat(result.lon),
+    formatted: result.display_name.split(",").slice(0, 3).join(", "),
   });
 }

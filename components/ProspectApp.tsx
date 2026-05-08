@@ -1,29 +1,30 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { Search, MapPin, Download, ChevronRight } from "lucide-react";
+import { useState } from "react";
 import Sidebar from "./Sidebar";
-import BusinessCard from "./BusinessCard";
+import { BusinessTable } from "./BusinessCard";
+import SavedSearches from "./SavedSearches";
 import { Business } from "@/app/api/search/route";
+import { saveSearch, SavedSearch } from "@/lib/storage";
 import { SECTORS } from "@/lib/constants";
 
 interface SearchState {
   results: Business[];
-  nextPageToken: string | null;
   totalFound: number;
   noWebsiteCount: number;
+  withWebsiteCount: number;
 }
 
 export default function ProspectApp() {
   const [locationInput, setLocationInput] = useState("");
-  const [resolvedLocation, setResolvedLocation] = useState<{ lat: number; lng: number; label: string } | null>(null);
+  const [resolvedLocation, setResolvedLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [selectedSectors, setSelectedSectors] = useState<string[]>(["restaurant"]);
-  const [radius, setRadius] = useState("5000");
+  const [distance, setDistance] = useState("ville");
+  const [websiteFilter, setWebsiteFilter] = useState("no_website");
+  const [maxLeads, setMaxLeads] = useState(10);
   const [searchState, setSearchState] = useState<SearchState | null>(null);
   const [isSearching, setIsSearching] = useState(false);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasSearched, setHasSearched] = useState(false);
 
   const handleSectorToggle = (type: string) => {
     setSelectedSectors((prev) =>
@@ -31,69 +32,74 @@ export default function ProspectApp() {
     );
   };
 
-  const geocodeLocation = async (address: string) => {
-    const res = await fetch(`/api/geocode?address=${encodeURIComponent(address)}`);
-    if (!res.ok) throw new Error("Localisation introuvable");
-    return res.json();
-  };
+  const doSearch = async (lat: number, lng: number, opts?: {
+    sectors?: string[]; dist?: string; wf?: string; ml?: number;
+  }) => {
+    const sectors = opts?.sectors ?? selectedSectors;
+    const dist = opts?.dist ?? distance;
+    const wf = opts?.wf ?? websiteFilter;
+    const ml = opts?.ml ?? maxLeads;
 
-  const fetchResults = useCallback(
-    async (lat: number, lng: number, pagetoken?: string, append = false) => {
-      const sectorsToSearch = selectedSectors.length > 0 ? selectedSectors : ["establishment"];
+    if (sectors.length === 0) {
+      setError("Sélectionnez au moins un secteur.");
+      return;
+    }
 
-      const allResults: Business[] = append ? (searchState?.results || []) : [];
-      let lastToken: string | null = null;
-      let totalFound = 0;
-      let noWebsiteCount = 0;
+    setIsSearching(true);
+    setError(null);
 
-      for (const sector of sectorsToSearch) {
+    // Lancer une requête par secteur en parallèle
+    const perSector = Math.ceil(ml / sectors.length);
+    try {
+      const promises = sectors.map((type) => {
         const params = new URLSearchParams({
           location: `${lat},${lng}`,
-          radius,
-          type: sector,
-          query: SECTORS.find((s) => s.type === sector)?.label || sector,
+          distance: dist,
+          type,
+          websiteFilter: wf,
+          maxLeads: String(perSector),
         });
-        if (pagetoken) params.set("pagetoken", pagetoken);
-
-        const res = await fetch(`/api/search?${params}`);
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.message || err.error || "Erreur de recherche");
-        }
-        const data = await res.json();
-        allResults.push(...data.results);
-        totalFound += data.total_found;
-        noWebsiteCount += data.no_website_count;
-        if (data.next_page_token) lastToken = data.next_page_token;
-      }
-
-      // Deduplicate by place_id
-      const seen = new Set<string>();
-      const unique = allResults.filter((b) => {
-        if (seen.has(b.place_id)) return false;
-        seen.add(b.place_id);
-        return true;
+        return fetch(`/api/search?${params}`).then((r) => r.json());
       });
 
-      setSearchState({ results: unique, nextPageToken: lastToken, totalFound, noWebsiteCount });
-    },
-    [selectedSectors, radius, searchState]
-  );
+      const allData = await Promise.all(promises);
 
-  const handleSearch = async () => {
-    if (!locationInput.trim()) return;
-    setError(null);
-    setIsSearching(true);
-    setHasSearched(true);
+      // Fusionner et dédupliquer
+      const seen = new Set<string>();
+      const merged: Business[] = [];
+      let totalFound = 0;
+      let noWebsite = 0;
+      let withWebsite = 0;
 
-    try {
-      let loc = resolvedLocation;
-      if (!loc || loc.label !== locationInput) {
-        const geo = await geocodeLocation(locationInput);
-        loc = { lat: geo.lat, lng: geo.lng, label: locationInput };
-        setResolvedLocation(loc);
+      for (const data of allData) {
+        totalFound += data.total_found || 0;
+        noWebsite += data.no_website_count || 0;
+        withWebsite += data.with_website_count || 0;
+        for (const b of data.results || []) {
+          if (!seen.has(b.place_id)) {
+            seen.add(b.place_id);
+            merged.push(b);
+          }
+        }
       }
-      await fetchResults(loc.lat, loc.lng);
+
+      // Trier : ouverts > inconnus > fermés, limiter au max
+      const open = merged.filter((b) => b.isOpen === true);
+      const unknown = merged.filter((b) => b.isOpen === null);
+      const closed = merged.filter((b) => b.isOpen === false);
+      const results = [...open, ...unknown, ...closed].slice(0, ml);
+
+      setSearchState({ results, totalFound, noWebsiteCount: noWebsite, withWebsiteCount: withWebsite });
+
+      // Sauvegarder automatiquement
+      const sectorLabels = sectors.map((s) => SECTORS.find((x) => x.type === s)?.label || s);
+      saveSearch({
+        label: `${locationInput} — ${sectorLabels.join(", ")}`,
+        city: locationInput,
+        sectors,
+        date: new Date().toISOString(),
+        results,
+      });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erreur inconnue");
     } finally {
@@ -101,172 +107,215 @@ export default function ProspectApp() {
     }
   };
 
-  const handleLoadMore = async () => {
-    if (!resolvedLocation || !searchState?.nextPageToken) return;
-    setIsLoadingMore(true);
-    try {
-      await fetchResults(resolvedLocation.lat, resolvedLocation.lng, searchState.nextPageToken, true);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Erreur");
-    } finally {
-      setIsLoadingMore(false);
+  const handleSearch = async () => {
+    if (!locationInput.trim()) return;
+    setError(null);
+
+    let loc = resolvedLocation;
+    if (!loc) {
+      setIsSearching(true);
+      try {
+        const geo = await fetch(`/api/geocode?address=${encodeURIComponent(locationInput)}`);
+        if (!geo.ok) {
+          const err = await geo.json();
+          throw new Error(err.error || "Ville introuvable");
+        }
+        const geoData = await geo.json();
+        loc = { lat: geoData.lat, lng: geoData.lng };
+        setResolvedLocation(loc);
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Erreur");
+        setIsSearching(false);
+        return;
+      }
     }
+    await doSearch(loc.lat, loc.lng);
+  };
+
+  const handleFilterChange = async (patch: {
+    sectors?: string[]; dist?: string; wf?: string; ml?: number;
+  }) => {
+    if (patch.sectors !== undefined) setSelectedSectors(patch.sectors);
+    if (patch.dist !== undefined) setDistance(patch.dist);
+    if (patch.wf !== undefined) setWebsiteFilter(patch.wf);
+    if (patch.ml !== undefined) setMaxLeads(patch.ml);
+    if (resolvedLocation) {
+      await doSearch(resolvedLocation.lat, resolvedLocation.lng, {
+        sectors: patch.sectors ?? selectedSectors,
+        dist: patch.dist ?? distance,
+        wf: patch.wf ?? websiteFilter,
+        ml: patch.ml ?? maxLeads,
+      });
+    }
+  };
+
+  const handleLoadSearch = (search: SavedSearch) => {
+    setLocationInput(search.city);
+    setSelectedSectors(search.sectors);
+    setSearchState({
+      results: search.results,
+      totalFound: search.results.length,
+      noWebsiteCount: search.results.filter((b) => !b.hasWebsite).length,
+      withWebsiteCount: search.results.filter((b) => b.hasWebsite).length,
+    });
+    setResolvedLocation(null);
   };
 
   const handleExportCSV = () => {
     if (!searchState?.results.length) return;
-    const header = ["Nom", "Secteur", "Adresse", "Téléphone", "Email"];
+    const header = ["Statut", "Nom", "Secteur", "Adresse", "Téléphone", "Site web"];
     const rows = searchState.results.map((b) => [
-      `"${b.name}"`,
-      `"${b.types[0] || ""}"`,
-      `"${b.address}"`,
-      `"${b.phone || ""}"`,
-      `"${b.email || ""}"`,
+      b.isOpen === true ? "Ouvert" : b.isOpen === false ? "À rappeler" : "Inconnu",
+      `"${b.name}"`, `"${b.types[0] || ""}"`, `"${b.address}"`,
+      `"${b.phone || ""}"`, `"${b.website || ""}"`,
     ]);
     const csv = [header, ...rows].map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `prospectai-${locationInput.replace(/\s/g, "_")}.csv`;
+    a.download = `prospectai-${locationInput}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   return (
-    <div className="min-h-screen p-6 flex flex-col gap-6">
-      {/* Top bar */}
-      <header className="flex items-center gap-4">
-        {/* Search bar */}
-        <div className="flex-1 flex items-center gap-2 glass rounded-2xl px-4 py-3 focus-within:border-indigo-500/50 transition-colors">
-          <MapPin size={18} className="text-white/30 shrink-0" />
-          <input
-            type="text"
-            placeholder="Ville, quartier ou adresse… (ex: Lyon, Paris 11e)"
-            value={locationInput}
-            onChange={(e) => setLocationInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            className="flex-1 bg-transparent outline-none text-white placeholder-white/25 text-sm"
-          />
-          {locationInput && (
-            <button
-              onClick={() => { setLocationInput(""); setResolvedLocation(null); }}
-              className="text-white/30 hover:text-white/60 transition-colors text-lg leading-none"
-            >
-              ×
+    <div style={{ display: "flex", minHeight: "100vh", padding: 24, gap: 24, maxWidth: 1500, margin: "0 auto" }}>
+      <Sidebar
+        selectedSectors={selectedSectors}
+        onSectorToggle={(t) => {
+          const next = selectedSectors.includes(t)
+            ? selectedSectors.filter((s) => s !== t)
+            : [...selectedSectors, t];
+          handleFilterChange({ sectors: next });
+        }}
+        distance={distance}
+        onDistanceChange={(d) => handleFilterChange({ dist: d })}
+        websiteFilter={websiteFilter}
+        onWebsiteFilterChange={(w) => handleFilterChange({ wf: w })}
+        maxLeads={maxLeads}
+        onMaxLeadsChange={(ml) => { setMaxLeads(ml); }}
+        stats={searchState ? {
+          total: searchState.totalFound,
+          noWebsite: searchState.noWebsiteCount,
+          withWebsite: searchState.withWebsiteCount,
+        } : null}
+      />
+
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 20 }}>
+        {/* Barre de recherche */}
+        <div style={{ display: "flex", gap: 10 }}>
+          <div style={{
+            flex: 1, display: "flex", alignItems: "center", gap: 10,
+            background: "#16161e", border: "1px solid rgba(255,255,255,0.07)",
+            borderRadius: 12, padding: "0 16px",
+          }}>
+            <span style={{ fontSize: 18, opacity: 0.4 }}>📍</span>
+            <input
+              type="text"
+              placeholder="Entrez une ville (ex : Lyon, Paris, Bordeaux…)"
+              value={locationInput}
+              onChange={(e) => { setLocationInput(e.target.value); setResolvedLocation(null); }}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              style={{
+                flex: 1, background: "none", border: "none", outline: "none",
+                color: "#e8e8f0", fontSize: 14, padding: "14px 0",
+              }}
+            />
+            {locationInput && (
+              <button onClick={() => { setLocationInput(""); setResolvedLocation(null); setSearchState(null); }}
+                style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: 18, padding: 0 }}>
+                ×
+              </button>
+            )}
+          </div>
+
+          <button
+            className="btn-primary"
+            onClick={handleSearch}
+            disabled={isSearching || !locationInput.trim() || selectedSectors.length === 0}
+            style={{ padding: "0 24px", fontSize: 14, display: "flex", alignItems: "center", gap: 8, minWidth: 140 }}
+          >
+            {isSearching ? <span className="spinner" /> : "🔍"}
+            {isSearching ? "Recherche…" : `Trouver ${maxLeads} leads`}
+          </button>
+
+          <SavedSearches onLoad={handleLoadSearch} />
+
+          {searchState?.results.length ? (
+            <button onClick={handleExportCSV} style={{
+              padding: "0 16px", borderRadius: 12,
+              background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+              color: "rgba(255,255,255,0.6)", fontSize: 13, cursor: "pointer",
+              display: "flex", alignItems: "center", gap: 6,
+            }}>
+              ⬇️ CSV
             </button>
-          )}
+          ) : null}
         </div>
 
-        <button
-          onClick={handleSearch}
-          disabled={isSearching || !locationInput.trim()}
-          className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-all accent-glow"
-        >
-          <Search size={16} />
-          {isSearching ? "Recherche…" : "Chercher"}
-        </button>
+        {/* Erreur */}
+        {error && (
+          <div style={{
+            padding: "12px 16px", borderRadius: 12,
+            background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)",
+            color: "#f87171", fontSize: 13,
+          }}>⚠️ {error}</div>
+        )}
 
-        {searchState?.results.length ? (
-          <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-2 px-4 py-3 rounded-2xl glass text-white/60 hover:text-white/90 text-sm font-medium transition-colors"
-          >
-            <Download size={16} />
-            CSV
-          </button>
-        ) : null}
-      </header>
+        {/* État vide */}
+        {!searchState && !isSearching && !error && (
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20, paddingTop: 80 }}>
+            <div style={{ fontSize: 56 }}>🗺️</div>
+            <div style={{ textAlign: "center" }}>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: "#e8e8f0" }}>Trouvez vos prochains clients</h2>
+              <p style={{ margin: "8px 0 0", fontSize: 14, color: "rgba(255,255,255,0.35)", maxWidth: 420 }}>
+                Entrez une ville, sélectionnez un ou plusieurs secteurs, et lancez la recherche.
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+              {["Lyon", "Paris", "Marseille", "Bordeaux", "Nantes", "Toulouse"].map((city) => (
+                <button key={city} onClick={() => setLocationInput(city)} style={{
+                  padding: "6px 14px", borderRadius: 20,
+                  background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+                  color: "rgba(255,255,255,0.5)", fontSize: 13, cursor: "pointer",
+                }}>{city}</button>
+              ))}
+            </div>
+          </div>
+        )}
 
-      <div className="flex gap-6 items-start">
-        {/* Sidebar */}
-        <Sidebar
-          selectedSectors={selectedSectors}
-          onSectorToggle={handleSectorToggle}
-          radius={radius}
-          onRadiusChange={setRadius}
-          stats={
-            searchState
-              ? { total: searchState.totalFound, noWebsite: searchState.noWebsiteCount }
-              : null
-          }
-          isSearching={isSearching}
-        />
-
-        {/* Main content */}
-        <main className="flex-1 min-w-0">
-          {!hasSearched && (
-            <div className="flex flex-col items-center justify-center py-32 gap-6">
-              <div className="w-20 h-20 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-                <svg className="w-10 h-10 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-              </div>
-              <div className="text-center">
-                <h2 className="text-xl font-semibold text-white/80 mb-2">Trouvez vos prochains clients</h2>
-                <p className="text-white/35 text-sm max-w-md">
-                  Entrez une ville ou un quartier, sélectionnez un secteur dans les filtres, et ProspectAI identifie
-                  toutes les entreprises locales sans site web.
+        {/* Résultats */}
+        {searchState && !isSearching && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <p style={{ margin: 0, fontSize: 13, color: "rgba(255,255,255,0.4)" }}>
+                <span style={{ color: "#818cf8", fontWeight: 600 }}>{searchState.results.length}</span> lead{searchState.results.length !== 1 ? "s" : ""}
+                {" "}· {searchState.noWebsiteCount} sans site · {searchState.withWebsiteCount} avec site
+              </p>
+            </div>
+            {searchState.results.length === 0 ? (
+              <div className="card" style={{ padding: 40, textAlign: "center" }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
+                <p style={{ margin: 0, color: "rgba(255,255,255,0.4)", fontSize: 14 }}>
+                  Aucun résultat. Essayez une zone plus large ou un autre secteur.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {["Lyon", "Paris 11e", "Marseille", "Bordeaux"].map((city) => (
-                  <button
-                    key={city}
-                    onClick={() => setLocationInput(city)}
-                    className="px-3 py-1.5 glass rounded-xl text-xs text-white/50 hover:text-white/80 transition-colors"
-                  >
-                    {city}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+            ) : (
+              <BusinessTable businesses={searchState.results} />
+            )}
+          </>
+        )}
 
-          {error && (
-            <div className="glass rounded-2xl p-4 border border-red-500/30 text-red-400 text-sm mb-4">
-              {error}
-            </div>
-          )}
-
-          {hasSearched && !isSearching && searchState && (
-            <>
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-white/40 text-sm">
-                  <span className="text-indigo-400 font-semibold">{searchState.results.length}</span> entreprise{searchState.results.length !== 1 ? "s" : ""} sans site web
-                  {resolvedLocation && <span className="text-white/25"> · {locationInput}</span>}
-                </p>
-              </div>
-
-              {searchState.results.length === 0 ? (
-                <div className="glass rounded-2xl p-10 text-center">
-                  <p className="text-white/40 text-sm">Aucune entreprise sans site trouvée dans ce secteur. Essayez un autre secteur ou augmentez le rayon.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
-                  {searchState.results.map((b, i) => (
-                    <BusinessCard key={b.place_id} business={b} index={i} />
-                  ))}
-                </div>
-              )}
-
-              {searchState.nextPageToken && (
-                <div className="flex justify-center mt-6">
-                  <button
-                    onClick={handleLoadMore}
-                    disabled={isLoadingMore}
-                    className="flex items-center gap-2 px-6 py-3 rounded-2xl glass hover:bg-white/10 text-white/60 hover:text-white/90 text-sm font-medium transition-all disabled:opacity-40"
-                  >
-                    {isLoadingMore ? "Chargement…" : "Charger plus"}
-                    {!isLoadingMore && <ChevronRight size={16} />}
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </main>
+        {/* Chargement */}
+        {isSearching && (
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, paddingTop: 80 }}>
+            <div className="spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />
+            <p style={{ margin: 0, color: "rgba(255,255,255,0.35)", fontSize: 14 }}>
+              Recherche sur {selectedSectors.length} secteur{selectedSectors.length > 1 ? "s" : ""}…
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
