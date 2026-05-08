@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getCRM, updateCRMEntry, deleteCRMEntry, CRMEntry } from "@/lib/storage";
+import { CRMEntry } from "@/lib/storage";
+
+// Les données viennent maintenant de l'API (Supabase)
 
 const STATUSES: { value: CRMEntry["status"]; label: string; color: string; bg: string; border: string }[] = [
   { value: "nouveau",       label: "Nouveau",       color: "#818cf8", bg: "rgba(99,102,241,0.12)",  border: "rgba(99,102,241,0.3)" },
@@ -33,25 +35,46 @@ function formatRappel(iso: string): { ligne1: string; ligne2: string; isPast: bo
 
 type EntryWithId = CRMEntry & { id: string };
 
+// Données Supabase — format snake_case → camelCase
+interface DBEntry {
+  id: string;
+  business: CRMEntry["business"];
+  status: CRMEntry["status"];
+  note: string;
+  rappel_at: string | null;
+  rappel_direction: CRMEntry["rappelDirection"];
+  site_cree: boolean;
+  added_at: string;
+}
+
 export default function CRMPage() {
-  const [crm, setCrm] = useState<Record<string, CRMEntry>>({});
+  const [entries, setEntries] = useState<EntryWithId[]>([]);
   const [filterStatus, setFilterStatus] = useState<CRMEntry["status"] | "all" | "a_rappeler" | "ils_rappellent">("all");
   const [editingNote, setEditingNote] = useState<string | null>(null);
   const [noteValue, setNoteValue] = useState("");
   const [editingRappel, setEditingRappel] = useState<string | null>(null);
   const [rappelValue, setRappelValue] = useState("");
 
-  const reload = () => setCrm(getCRM());
+  const reload = async () => {
+    const res = await fetch("/api/crm");
+    if (!res.ok) return;
+    const data: DBEntry[] = await res.json();
+    setEntries(data.map((e) => ({
+      id: e.id,
+      business: e.business,
+      status: e.status,
+      note: e.note,
+      rappelAt: e.rappel_at,
+      rappelDirection: e.rappel_direction,
+      siteCree: e.site_cree,
+      addedAt: e.added_at,
+      updatedAt: e.added_at,
+    })));
+  };
+
   useEffect(() => { reload(); }, []);
 
-  const allEntries: EntryWithId[] = Object.entries(crm).map(([id, e]) => ({
-    ...e,
-    // migration: anciens leads sans ces champs
-    rappelAt: e.rappelAt ?? null,
-    rappelDirection: e.rappelDirection ?? null,
-    siteCree: e.siteCree ?? false,
-    id,
-  }));
+  const allEntries: EntryWithId[] = entries;
 
   const filtered: EntryWithId[] = (
     filterStatus === "all" ? allEntries
@@ -67,9 +90,23 @@ export default function CRMPage() {
       return new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime();
     });
 
-  const update = (id: string, patch: Partial<Pick<CRMEntry, "status" | "note" | "rappelAt" | "rappelDirection" | "siteCree">>) => {
-    updateCRMEntry(id, patch);
-    reload();
+  const update = async (id: string, patch: Partial<Pick<CRMEntry, "status" | "note" | "rappelAt" | "rappelDirection" | "siteCree">>) => {
+    // Convertir camelCase → snake_case pour Supabase
+    const dbPatch: Record<string, unknown> = {};
+    if (patch.status !== undefined) dbPatch.status = patch.status;
+    if (patch.note !== undefined) dbPatch.note = patch.note;
+    if (patch.rappelAt !== undefined) dbPatch.rappel_at = patch.rappelAt;
+    if (patch.rappelDirection !== undefined) dbPatch.rappel_direction = patch.rappelDirection;
+    if (patch.siteCree !== undefined) dbPatch.site_cree = patch.siteCree;
+
+    // Optimistic update
+    setEntries((prev) => prev.map((e) => e.id === id ? { ...e, ...patch } : e));
+
+    await fetch(`/api/crm/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dbPatch),
+    });
   };
 
   const saveNote = (id: string) => {
@@ -80,6 +117,11 @@ export default function CRMPage() {
   const saveRappel = (id: string) => {
     update(id, { rappelAt: rappelValue ? new Date(rappelValue).toISOString() : null });
     setEditingRappel(null);
+  };
+
+  const removeEntry = async (id: string) => {
+    setEntries((prev) => prev.filter((e) => e.id !== id));
+    await fetch(`/api/crm/${id}`, { method: "DELETE" });
   };
 
   const openMaps = (name: string, address: string) =>
@@ -340,7 +382,7 @@ export default function CRMPage() {
                     background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.2)",
                     color: "#818cf8", fontSize: 13, cursor: "pointer",
                   }}>📍</button>
-                  <button onClick={() => { deleteCRMEntry(entry.id); reload(); }} style={{
+                  <button onClick={() => removeEntry(entry.id)} style={{
                     padding: "6px 10px", borderRadius: 8,
                     background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)",
                     color: "#f87171", fontSize: 13, cursor: "pointer",

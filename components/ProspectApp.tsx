@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { useEffect } from "react";
 import Sidebar from "./Sidebar";
 import { BusinessTable } from "./BusinessCard";
 import SavedSearches from "./SavedSearches";
 import CRMPage from "./CRMPage";
 import CityInput from "./CityInput";
+import AdminPanel from "./AdminPanel";
 import { Business } from "@/app/api/search/route";
-import { saveSearch, SavedSearch, addToCRM, getCRM } from "@/lib/storage";
+import { saveSearch, SavedSearch } from "@/lib/storage";
 import { SECTORS } from "@/lib/constants";
 
 interface SearchState {
@@ -28,10 +30,14 @@ export default function ProspectApp() {
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<"search" | "crm">("search");
-  const [addedIds, setAddedIds] = useState<Set<string>>(() => {
-    if (typeof window === "undefined") return new Set();
-    return new Set(Object.keys(getCRM()));
-  });
+  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
+  const [session, setSession] = useState<{ username: string; role: "admin" | "telepro" } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/me").then((r) => r.json()).then((d) => {
+      if (d.username) setSession({ username: d.username, role: d.role });
+    });
+  }, []);
 
   const handleSectorToggle = (type: string) => {
     setSelectedSectors((prev) =>
@@ -168,14 +174,27 @@ export default function ProspectApp() {
     setResolvedLocation(null);
   };
 
-  const handleAddToCRM = (b: Business) => {
-    addToCRM(b);
+  const handleAddToCRM = async (b: Business) => {
+    await fetch("/api/crm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ business: b }),
+    });
     setAddedIds((prev) => new Set([...prev, b.place_id]));
   };
 
-  const handleAddAllToCRM = () => {
-    searchState?.results.forEach((b) => addToCRM(b));
-    setAddedIds((prev) => new Set([...prev, ...(searchState?.results.map((b) => b.place_id) || [])]));
+  const handleAddAllToCRM = async () => {
+    if (!searchState?.results) return;
+    await Promise.all(
+      searchState.results.map((b) =>
+        fetch("/api/crm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ business: b }),
+        })
+      )
+    );
+    setAddedIds((prev) => new Set([...prev, ...searchState.results.map((b) => b.place_id)]));
   };
 
   const handleExportCSV = () => {
@@ -227,6 +246,21 @@ export default function ProspectApp() {
       {view === "crm" && <div style={{ flex: 1, minWidth: 0 }}><CRMPage /></div>}
 
       {view === "search" && <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 20 }}>
+        {/* Header utilisateur */}
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10 }}>
+          {session && (
+            <>
+              <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>
+                {session.role === "admin" ? "👑" : "🧑‍💼"} {session.username}
+              </span>
+              <button onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}
+                style={{ padding: "4px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "transparent", color: "rgba(255,255,255,0.35)", fontSize: 12, cursor: "pointer" }}>
+                Déconnexion
+              </button>
+            </>
+          )}
+        </div>
+
         {/* Barre de recherche */}
         <div style={{ display: "flex", gap: 10 }}>
           <CityInput
@@ -308,12 +342,17 @@ export default function ProspectApp() {
                 </p>
               </div>
             ) : (
-              <BusinessTable
-                businesses={searchState.results}
-                onAddToCRM={handleAddToCRM}
-                onAddAllToCRM={handleAddAllToCRM}
-                addedIds={addedIds}
-              />
+              <>
+                {session?.role === "admin" && (
+                  <AdminPanel selectedLeads={searchState.results} />
+                )}
+                <BusinessTable
+                  businesses={searchState.results}
+                  onAddToCRM={handleAddToCRM}
+                  onAddAllToCRM={handleAddAllToCRM}
+                  addedIds={addedIds}
+                />
+              </>
             )}
           </>
         )}
