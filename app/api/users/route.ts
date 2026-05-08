@@ -9,7 +9,7 @@ export async function GET() {
     return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
 
   const rows = await sql`
-    SELECT id, username, role, created_at FROM users
+    SELECT id, username, role, plain_password, created_at FROM users
     WHERE role = 'telepro' ORDER BY created_at DESC
   `;
   return NextResponse.json(rows);
@@ -28,9 +28,9 @@ export async function POST(req: NextRequest) {
 
   try {
     const rows = await sql`
-      INSERT INTO users (username, password_hash, role)
-      VALUES (${username.trim().toLowerCase()}, ${hash}, 'telepro')
-      RETURNING id, username, role, created_at
+      INSERT INTO users (username, password_hash, plain_password, role)
+      VALUES (${username.trim().toLowerCase()}, ${hash}, ${password}, 'telepro')
+      RETURNING id, username, role, plain_password, created_at
     `;
     return NextResponse.json(rows[0]);
   } catch (e: unknown) {
