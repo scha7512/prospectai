@@ -11,6 +11,7 @@ const STATUSES: { value: CRMEntry["status"]; label: string; color: string; bg: s
   { value: "interesse",     label: "Intéressé",     color: "#facc15", bg: "rgba(250,204,21,0.12)",  border: "rgba(250,204,21,0.3)" },
   { value: "signe",         label: "Signé ✓",       color: "#4ade80", bg: "rgba(74,222,128,0.12)",  border: "rgba(74,222,128,0.3)" },
   { value: "pas_interesse", label: "Pas intéressé", color: "#f87171", bg: "rgba(248,113,113,0.12)", border: "rgba(248,113,113,0.3)" },
+  { value: "nrp",          label: "NRP",           color: "#94a3b8", bg: "rgba(148,163,184,0.1)",  border: "rgba(148,163,184,0.25)" },
 ];
 
 const JOURS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];

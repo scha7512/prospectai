@@ -2,7 +2,7 @@ import { Business } from "@/app/api/search/route";
 
 export interface CRMEntry {
   business: Business;
-  status: "nouveau" | "contacte" | "interesse" | "signe" | "pas_interesse";
+  status: "nouveau" | "contacte" | "interesse" | "signe" | "pas_interesse" | "nrp";
   note: string;
   rappelAt: string | null;
   rappelDirection: "je_rappelle" | "ils_rappellent" | null;
