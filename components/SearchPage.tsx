@@ -23,6 +23,7 @@ export default function SearchPage({ onResultsChange }: Props) {
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState("");
   const [stats, setStats] = useState<{ total: number; noWebsite: number; withWebsite: number } | null>(null);
+  const [provider, setProvider] = useState<string | null>(null);
 
   const allSelected = sectors.length === SECTORS.length;
   const filteredSectors = SECTORS.filter((s) => s.label.toLowerCase().includes(sectorSearch.toLowerCase()));
@@ -51,6 +52,8 @@ export default function SearchPage({ onResultsChange }: Props) {
         ...merged.filter((b) => b.isOpen === null),
         ...merged.filter((b) => b.isOpen === false),
       ].slice(0, maxLeads);
+      const providers = all.map((d) => d.provider).filter(Boolean);
+      setProvider(providers[0] || "osm");
       setResults(sorted);
       setStats({ total, noWebsite: noWeb, withWebsite: withWeb });
       onResultsChange(sorted);
@@ -219,7 +222,7 @@ export default function SearchPage({ onResultsChange }: Props) {
 
         {/* Stats */}
         {stats && results.length > 0 && (
-          <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
             {[
               { label: "Résultats", val: results.length, color: "var(--accent-light)" },
               { label: "Sans site", val: stats.noWebsite, color: "var(--green)" },
@@ -230,6 +233,12 @@ export default function SearchPage({ onResultsChange }: Props) {
                 <span style={{ fontSize: 12, color: "var(--muted)" }}>{s.label}</span>
               </div>
             ))}
+            {provider && (
+              <div style={{ marginLeft: "auto", fontSize: 11, color: "var(--muted)", display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: provider === "osm" ? "var(--yellow)" : "var(--green)", display: "inline-block" }} />
+                Source : {provider === "serpapi" ? "Google Maps (SerpAPI)" : provider === "apify" ? "Google Maps (Apify)" : "OpenStreetMap (qualité réduite)"}
+              </div>
+            )}
           </div>
         )}
 

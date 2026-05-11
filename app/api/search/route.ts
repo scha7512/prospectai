@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isOpenNow } from "@/lib/openingHours";
+import { searchViaSerpAPI, searchViaApify, searchViaOSM, toBusiness } from "@/lib/scrapers";
 
 export interface Business {
   place_id: string;
@@ -13,7 +13,7 @@ export interface Business {
   email?: string;
   hasWebsite: boolean;
   website?: string;
-  isOpen: boolean | null; // null = horaires inconnus
+  isOpen: boolean | null;
 }
 
 const SECTOR_QUERIES: Record<string, string> = {
@@ -45,120 +45,70 @@ const RADIUS_MAP: Record<string, number> = {
   region: 15000,
 };
 
-async function fetchNominatim(query: string, lat: number, lng: number, radius: number): Promise<NominatimResult[]> {
-  const url = new URL("https://nominatim.openstreetmap.org/search");
-  url.searchParams.set("q", query);
-  url.searchParams.set("format", "jsonv2");
-  url.searchParams.set("limit", "50");
-  url.searchParams.set("viewbox", buildViewbox(lat, lng, radius));
-  url.searchParams.set("bounded", "1");
-  url.searchParams.set("addressdetails", "1");
-  url.searchParams.set("extratags", "1");
-  url.searchParams.set("accept-language", "fr");
-
-  const res = await fetch(url.toString(), {
-    headers: { "User-Agent": "ProspectAI/1.0 contact@prospectai.app", "Accept": "application/json" },
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!res.ok) throw new Error("Nominatim error");
-  return res.json();
-}
-
-function parseResult(item: NominatimResult, type: string): Business | null {
-  if (!item.display_name || !item.lat || !item.lon) return null;
-  const extra = item.extratags || {};
-  const website = extra.website || extra["contact:website"];
-  const phone = extra.phone || extra["contact:phone"] || extra["contact:mobile"];
-  if (!phone) return null; // exclure sans téléphone
-
-  const addr = item.address || {};
-  const addressParts = [
-    addr.house_number, addr.road, addr.postcode,
-    addr.city || addr.town || addr.village,
-  ].filter(Boolean);
-
-  return {
-    place_id: `nom-${item.place_id}`,
-    name: item.name || item.display_name.split(",")[0],
-    address: addressParts.join(" ") || item.display_name.split(",").slice(0, 3).join(", "),
-    phone,
-    email: extra.email || extra["contact:email"],
-    types: [type],
-    lat: parseFloat(item.lat),
-    lng: parseFloat(item.lon),
-    opening_hours_raw: extra.opening_hours,
-    hasWebsite: !!website,
-    website,
-    isOpen: isOpenNow(extra.opening_hours),
-  };
-}
-
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const location = searchParams.get("location") || "";
-  const distance = searchParams.get("distance") || "ville";
-  const type = searchParams.get("type") || "restaurant";
+  const location   = searchParams.get("location") || "";
+  const distance   = searchParams.get("distance") || "ville";
+  const type       = searchParams.get("type") || "restaurant";
   const websiteFilter = searchParams.get("websiteFilter") || "no_website";
-  const maxLeads = Math.min(parseInt(searchParams.get("maxLeads") || "20"), 100);
+  const maxLeads   = Math.min(parseInt(searchParams.get("maxLeads") || "20"), 100);
 
   if (!location) return NextResponse.json({ error: "Location required" }, { status: 400 });
 
   const [lat, lng] = location.split(",").map(Number);
-  const baseRadius = RADIUS_MAP[distance] || 5000;
-  const query = SECTOR_QUERIES[type] || type;
+  const radius = RADIUS_MAP[distance] || 5000;
+  const query = `${SECTOR_QUERIES[type] || type}`;
+  const queryWithCity = query; // SerpAPI/Apify utilisent lat/lng directement
 
-  // Tente avec rayon de base, puis double si pas assez de résultats
-  let allRaw: NominatimResult[] = [];
-  try {
-    allRaw = await fetchNominatim(query, lat, lng, baseRadius);
-    if (allRaw.length < maxLeads * 2) {
-      const wider = await fetchNominatim(query, lat, lng, baseRadius * 3);
-      const existingIds = new Set(allRaw.map((r) => r.place_id));
-      allRaw.push(...wider.filter((r) => !existingIds.has(r.place_id)));
-    }
-  } catch {
-    return NextResponse.json({ error: "Erreur de recherche. Réessayez." }, { status: 502 });
+  let providerUsed = "osm";
+  let rawResults = null;
+
+  // ── 1. Essai SerpAPI ──────────────────────────────────────────────────────
+  if (process.env.SERPAPI_KEY) {
+    rawResults = await searchViaSerpAPI(queryWithCity, lat, lng, maxLeads * 3);
+    if (rawResults) providerUsed = "serpapi";
   }
 
-  const businesses: Business[] = allRaw
-    .map((item) => parseResult(item, type))
+  // ── 2. Essai Apify ────────────────────────────────────────────────────────
+  if (!rawResults && process.env.APIFY_TOKEN) {
+    rawResults = await searchViaApify(queryWithCity, lat, lng, maxLeads * 2);
+    if (rawResults) providerUsed = "apify";
+  }
+
+  // ── 3. Fallback OSM ───────────────────────────────────────────────────────
+  if (!rawResults) {
+    rawResults = await searchViaOSM(query, lat, lng, radius);
+    providerUsed = "osm";
+  }
+
+  // ── Conversion + filtres ──────────────────────────────────────────────────
+  const businesses: Business[] = (rawResults || [])
+    .map((r) => toBusiness(r, type))
     .filter((b): b is Business => b !== null);
 
-  const websiteFiltered = businesses.filter((b) => {
-    if (websiteFilter === "no_website") return !b.hasWebsite;
+  // Dédupliquer par nom + adresse
+  const seen = new Set<string>();
+  const unique = businesses.filter((b) => {
+    const key = `${b.name.toLowerCase()}-${b.address.slice(0, 20).toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // Filtre site web
+  const filtered = unique.filter((b) => {
+    if (websiteFilter === "no_website")   return !b.hasWebsite;
     if (websiteFilter === "with_website") return b.hasWebsite;
     return true;
   });
 
-  // Trier : ouverts en premier, puis horaires inconnus, puis fermés
-  const open = websiteFiltered.filter((b) => b.isOpen === true);
-  const unknown = websiteFiltered.filter((b) => b.isOpen === null);
-  const closed = websiteFiltered.filter((b) => b.isOpen === false);
-  const sorted = [...open, ...unknown, ...closed];
-
-  const results = sorted.slice(0, maxLeads);
+  const results = filtered.slice(0, maxLeads);
 
   return NextResponse.json({
     results,
-    total_found: businesses.length,
-    no_website_count: businesses.filter((b) => !b.hasWebsite).length,
-    with_website_count: businesses.filter((b) => b.hasWebsite).length,
-    open_count: open.length,
-    closed_count: closed.length,
+    provider: providerUsed,
+    total_found: unique.length,
+    no_website_count: unique.filter((b) => !b.hasWebsite).length,
+    with_website_count: unique.filter((b) => b.hasWebsite).length,
   });
-}
-
-function buildViewbox(lat: number, lng: number, radiusMeters: number): string {
-  const deg = radiusMeters / 111000;
-  return `${lng - deg},${lat + deg},${lng + deg},${lat - deg}`;
-}
-
-interface NominatimResult {
-  place_id: number;
-  lat: string;
-  lon: string;
-  display_name: string;
-  name?: string;
-  address?: Record<string, string>;
-  extratags?: Record<string, string>;
 }
