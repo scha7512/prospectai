@@ -14,6 +14,8 @@ const STATUSES: { value: CRMEntry["status"]; label: string; color: string; bg: s
   { value: "nrp",          label: "NRP",           color: "#94a3b8", bg: "rgba(148,163,184,0.1)",  border: "rgba(148,163,184,0.25)" },
   { value: "faux_lead",   label: "Faux lead",     color: "#fb923c", bg: "rgba(251,146,60,0.1)",   border: "rgba(251,146,60,0.25)"  },
   { value: "faux_num",    label: "Faux num",      color: "#e879f9", bg: "rgba(232,121,249,0.1)",  border: "rgba(232,121,249,0.25)" },
+  { value: "ferme",          label: "Fermé",            color: "#64748b", bg: "rgba(100,116,139,0.1)",  border: "rgba(100,116,139,0.25)" },
+  { value: "deja_installe",  label: "Déjà installé",   color: "#2dd4bf", bg: "rgba(45,212,191,0.1)",  border: "rgba(45,212,191,0.25)"  },
 ];
 
 const JOURS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
