@@ -12,6 +12,8 @@ const STATUSES: { value: CRMEntry["status"]; label: string; color: string; bg: s
   { value: "signe",         label: "Signé ✓",       color: "#4ade80", bg: "rgba(74,222,128,0.12)",  border: "rgba(74,222,128,0.3)" },
   { value: "pas_interesse", label: "Pas intéressé", color: "#f87171", bg: "rgba(248,113,113,0.12)", border: "rgba(248,113,113,0.3)" },
   { value: "nrp",          label: "NRP",           color: "#94a3b8", bg: "rgba(148,163,184,0.1)",  border: "rgba(148,163,184,0.25)" },
+  { value: "faux_lead",   label: "Faux lead",     color: "#fb923c", bg: "rgba(251,146,60,0.1)",   border: "rgba(251,146,60,0.25)"  },
+  { value: "faux_num",    label: "Faux num",      color: "#e879f9", bg: "rgba(232,121,249,0.1)",  border: "rgba(232,121,249,0.25)" },
 ];
 
 const JOURS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
