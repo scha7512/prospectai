@@ -3,6 +3,7 @@
 import { useState } from "react";
 import NavSidebar from "./NavSidebar";
 import CRMPage from "./CRMPage";
+import CalendarPage from "./CalendarPage";
 
 interface Props {
   session: { userId: string; username: string; role: "admin" | "telepro" };
@@ -10,11 +11,13 @@ interface Props {
 }
 
 const NAV = [
-  { id: "crm", icon: "📋", label: "Mes leads" },
+  { id: "crm",      icon: "📋", label: "Mes leads" },
+  { id: "calendar", icon: "📅", label: "Calendrier" },
 ];
 
 const PAGE_TITLES: Record<string, { title: string; sub: string }> = {
-  crm: { title: "Mes leads", sub: "Les prospects qui vous ont été assignés" },
+  crm:      { title: "Mes leads",   sub: "Les prospects qui vous ont été assignés" },
+  calendar: { title: "Calendrier",  sub: "Vos rappels et rendez-vous" },
 };
 
 export default function TeleproApp({ session, onLogout }: Props) {
@@ -39,7 +42,8 @@ export default function TeleproApp({ session, onLogout }: Props) {
           </div>
         </div>
         <div className="content">
-          <CRMPage />
+          {view === "crm"      && <CRMPage />}
+          {view === "calendar" && <CalendarPage />}
         </div>
       </div>
     </div>
