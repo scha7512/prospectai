@@ -2,15 +2,16 @@
 
 import { useState, useCallback } from "react";
 import { Business } from "@/app/api/search/route";
-import { SECTORS, DISTANCES } from "@/lib/constants";
+import { DISTANCES } from "@/lib/constants";
+import { getBusinessConfig } from "@/lib/businesses";
 import CityInput from "./CityInput";
 import { BusinessTable } from "./BusinessCard";
 import SavedSearches from "./SavedSearches";
 import { saveSearch, SavedSearch } from "@/lib/storage";
 
-interface Props { onResultsChange: (leads: Business[]) => void; }
+interface Props { onResultsChange: (leads: Business[]) => void; businessId?: string; }
 
-export default function SearchPage({ onResultsChange }: Props) {
+export default function SearchPage({ onResultsChange, businessId = "gensite" }: Props) {
   const [city, setCity] = useState("");
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [sectors, setSectors] = useState<string[]>(["restaurant"]);
@@ -25,6 +26,7 @@ export default function SearchPage({ onResultsChange }: Props) {
   const [stats, setStats] = useState<{ total: number; noWebsite: number; withWebsite: number } | null>(null);
   const [provider, setProvider] = useState<string | null>(null);
 
+  const SECTORS = getBusinessConfig(businessId).sectors;
   const allSelected = sectors.length === SECTORS.length;
   const filteredSectors = SECTORS.filter((s) => s.label.toLowerCase().includes(sectorSearch.toLowerCase()));
 
@@ -78,12 +80,12 @@ export default function SearchPage({ onResultsChange }: Props) {
   };
 
   const addToCRM = async (b: Business) => {
-    await fetch("/api/crm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ business: b }) });
+    await fetch("/api/crm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ business: b, businessId }) });
     setAddedIds((p) => new Set([...p, b.place_id]));
   };
 
   const addAllToCRM = async () => {
-    await Promise.all(results.map((b) => fetch("/api/crm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ business: b }) })));
+    await Promise.all(results.map((b) => fetch("/api/crm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ business: b, businessId }) })));
     setAddedIds((p) => new Set([...p, ...results.map((b) => b.place_id)]));
   };
 

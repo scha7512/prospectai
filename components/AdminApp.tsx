@@ -7,10 +7,13 @@ import SettingsPage from "./SettingsPage";
 import SearchPage from "./SearchPage";
 import CalendarPage from "./CalendarPage";
 import { Business } from "@/app/api/search/route";
+import { getBusinessConfig } from "@/lib/businesses";
 
 interface Props {
   session: { userId: string; username: string; role: "admin" | "telepro" };
   onLogout: () => void;
+  businessId: string;
+  onChangeBusiness?: () => void;
 }
 
 const NAV = [
@@ -27,11 +30,12 @@ const PAGE_TITLES: Record<string, { title: string; sub: string }> = {
   settings: { title: "Paramètres",         sub: "Gestion de l'équipe et des comptes" },
 };
 
-export default function AdminApp({ session, onLogout }: Props) {
+export default function AdminApp({ session, onLogout, businessId, onChangeBusiness }: Props) {
   const [view, setView] = useState("search");
   const [searchLeads, setSearchLeads] = useState<Business[]>([]);
 
   const page = PAGE_TITLES[view] || PAGE_TITLES.search;
+  const biz = getBusinessConfig(businessId);
 
   return (
     <div className="layout">
@@ -42,6 +46,9 @@ export default function AdminApp({ session, onLogout }: Props) {
         username={session.username}
         role="admin"
         onLogout={onLogout}
+        businessName={biz.name}
+        businessEmoji={biz.emoji}
+        onChangeBusiness={onChangeBusiness}
       />
       <div className="main">
         <div className="topbar">
@@ -57,10 +64,10 @@ export default function AdminApp({ session, onLogout }: Props) {
         </div>
 
         <div className="content">
-          {view === "search"   && <SearchPage onResultsChange={setSearchLeads} />}
-          {view === "crm"      && <CRMPage />}
-          {view === "calendar" && <CalendarPage />}
-          {view === "settings" && <SettingsPage currentLeads={searchLeads} />}
+          {view === "search"   && <SearchPage onResultsChange={setSearchLeads} businessId={businessId} />}
+          {view === "crm"      && <CRMPage businessId={businessId} />}
+          {view === "calendar" && <CalendarPage businessId={businessId} />}
+          {view === "settings" && <SettingsPage currentLeads={searchLeads} businessId={businessId} />}
         </div>
       </div>
     </div>

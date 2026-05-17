@@ -17,6 +17,7 @@ export interface Business {
 }
 
 const SECTOR_QUERIES: Record<string, string> = {
+  // GenSite
   restaurant:         "restaurant",
   cafe:               "café",
   bar:                "bar",
@@ -37,6 +38,13 @@ const SECTOR_QUERIES: Record<string, string> = {
   lodging:            "hôtel",
   real_estate_agency: "agence immobilière",
   accounting:         "comptable",
+  // Copywriting
+  recruitment_agency: "cabinet de recrutement",
+  travel_agency:      "agence de voyage",
+  concierge:          "conciergerie",
+  event_agency:       "agence événementielle",
+  property_developer: "promoteur immobilier",
+  seasonal_rental:    "location saisonnière",
 };
 
 const RADIUS_MAP: Record<string, number> = {

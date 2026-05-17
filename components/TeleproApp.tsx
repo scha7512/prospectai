@@ -8,6 +8,7 @@ import CalendarPage from "./CalendarPage";
 interface Props {
   session: { userId: string; username: string; role: "admin" | "telepro" };
   onLogout: () => void;
+  businessId: string;
 }
 
 const NAV = [
@@ -16,11 +17,11 @@ const NAV = [
 ];
 
 const PAGE_TITLES: Record<string, { title: string; sub: string }> = {
-  crm:      { title: "Mes leads",   sub: "Les prospects qui vous ont été assignés" },
-  calendar: { title: "Calendrier",  sub: "Vos rappels et rendez-vous" },
+  crm:      { title: "Mes leads",  sub: "Les prospects qui vous ont été assignés" },
+  calendar: { title: "Calendrier", sub: "Vos rappels et rendez-vous" },
 };
 
-export default function TeleproApp({ session, onLogout }: Props) {
+export default function TeleproApp({ session, onLogout, businessId }: Props) {
   const [view, setView] = useState("crm");
   const page = PAGE_TITLES[view] || PAGE_TITLES.crm;
 
@@ -42,8 +43,8 @@ export default function TeleproApp({ session, onLogout }: Props) {
           </div>
         </div>
         <div className="content">
-          {view === "crm"      && <CRMPage />}
-          {view === "calendar" && <CalendarPage />}
+          {view === "crm"      && <CRMPage businessId={businessId} />}
+          {view === "calendar" && <CalendarPage businessId={businessId} />}
         </div>
       </div>
     </div>

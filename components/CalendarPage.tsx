@@ -45,7 +45,7 @@ function sameDay(a: Date, b: Date) {
   return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
 }
 
-export default function CalendarPage() {
+export default function CalendarPage({ businessId = "gensite" }: { businessId?: string }) {
   const [rappels, setRappels]   = useState<RappelEntry[]>([]);
   const [today]                 = useState(new Date());
   const [current, setCurrent]   = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
@@ -53,7 +53,7 @@ export default function CalendarPage() {
   const [copiedPhone, setCopiedPhone] = useState<string|null>(null);
 
   useEffect(() => {
-    fetch("/api/crm").then((r) => r.json()).then((data: DBEntry[]) => {
+    fetch(`/api/crm?businessId=${businessId}`).then((r) => r.json()).then((data: DBEntry[]) => {
       setRappels(data.filter((e) => e.rappel_at).map((e) => ({
         id: e.id, name: e.business.name, phone: e.business.phone,
         address: e.business.address, status: e.status,

@@ -38,7 +38,7 @@ interface DBEntry {
   site_cree: boolean; added_at: string;
 }
 
-export default function CRMPage() {
+export default function CRMPage({ businessId = "gensite" }: { businessId?: string }) {
   const [entries, setEntries]           = useState<EntryWithId[]>([]);
   const [filterStatus, setFilterStatus] = useState<CRMEntry["status"] | "all" | "a_rappeler" | "ils_rappellent">("all");
   const [editNote, setEditNote]         = useState<string | null>(null);
@@ -48,7 +48,7 @@ export default function CRMPage() {
   const [copiedPhone, setCopiedPhone]   = useState<string | null>(null);
 
   const reload = async () => {
-    const r = await fetch("/api/crm");
+    const r = await fetch(`/api/crm?businessId=${businessId}`);
     if (!r.ok) return;
     const data: DBEntry[] = await r.json();
     setEntries(data.map((e) => ({

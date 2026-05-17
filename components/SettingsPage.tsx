@@ -5,9 +5,9 @@ import { Business } from "@/app/api/search/route";
 
 interface Telepro { id: string; username: string; plain_password: string; created_at: string; }
 
-interface Props { currentLeads: Business[]; }
+interface Props { currentLeads: Business[]; businessId?: string; }
 
-export default function SettingsPage({ currentLeads }: Props) {
+export default function SettingsPage({ currentLeads, businessId = "gensite" }: Props) {
   const [telepros, setTelepros] = useState<Telepro[]>([]);
   const [newUser, setNewUser] = useState("");
   const [newPass, setNewPass] = useState("");

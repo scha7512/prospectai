@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
   if (!session || session.role !== "admin")
     return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
 
-  const { userIds, businesses } = await req.json();
+  const { userIds, businesses, businessId = "gensite" } = await req.json();
   if (!userIds?.length || !businesses?.length)
     return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 });
 
@@ -15,8 +15,8 @@ export async function POST(req: NextRequest) {
   for (const userId of userIds) {
     for (const business of businesses) {
       const rows = await sql`
-        INSERT INTO crm_entries (user_id, place_id, business, status, note, rappel_at, rappel_direction, site_cree)
-        VALUES (${userId}, ${business.place_id}, ${JSON.stringify(business)}, 'nouveau', '', NULL, NULL, false)
+        INSERT INTO crm_entries (user_id, place_id, business, status, note, rappel_at, rappel_direction, site_cree, business_id)
+        VALUES (${userId}, ${business.place_id}, ${JSON.stringify(business)}, 'nouveau', '', NULL, NULL, false, ${businessId})
         ON CONFLICT (user_id, place_id) DO NOTHING
         RETURNING id
       `;
