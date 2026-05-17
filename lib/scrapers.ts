@@ -1,5 +1,48 @@
 import { Business } from "@/app/api/search/route";
 
+// ─── Liste noire des grandes enseignes ───────────────────────────────────────
+// Chaînes qui ont forcément un site web — on les exclut toujours
+
+const CHAIN_BLACKLIST = [
+  // Restauration rapide
+  "mcdonald","mcdo","kfc","burger king","quick","subway","five guys","papa john",
+  "domino","pizza hut","little caesars","kebab king","bagelstein","big mamma",
+  "leon","chipotle","taco bell","popeyes","nando","pret a manger",
+  // Boulangeries / cafés chaînes
+  "paul","brioche dorée","brioche doree","feuillette","marie blachère","marie blachere",
+  "boulangerie louise","le fournil","ange boulangerie","au pain quotidien",
+  "starbucks","columbus café","columbus cafe","costa coffee","tim hortons",
+  "café de flore","les deux magots",
+  // Bars / brasseries chaînes
+  "flunch","courtepaille","hippopotamus","buffalo grill","bistro régent","bistro regent",
+  "léon de bruxelles","leon de bruxelles","la boucherie","le boucher","waffle house",
+  // Hotels chaînes
+  "ibis","mercure","novotel","pullman","sofitel","mövenpick","movenpick",
+  "holiday inn","hilton","marriott","hyatt","radisson","best western","b&b hotel",
+  "campanile","kyriad","première classe","premiere classe","formule 1","f1 hotel",
+  "all suites","appart hotel","citadines","adagio","suite novotel",
+  // Pharmacies / santé chaînes
+  "pharmacie lafayette","pharmacies lafayette","monoprix pharma","wellpharma",
+  // Immobilier chaînes
+  "century 21","orpi","laforêt","laforet","guy hoquet","stéphane plaza","stephane plaza",
+  "nexity","foncia","citya","immo de france","l'adresse","square habitat",
+  "era immobilier","coldwell banker","sotheby","barnes","engel volkers",
+  // Coiffure chaînes
+  "franck provost","jean louis david","dessange","camille albane","saint algue",
+  "tchibò","toni&guy","toni and guy","great clips","supercuts",
+  // Sport / fitness chaînes
+  "basic fit","basic-fit","neoness","fitness park","keep cool","salle de sport orange",
+  "orange bleue","l'orange bleue","moving","first class","gymnasium",
+  // Vêtements
+  "zara","h&m","uniqlo","primark","kiabi","gémo","gemo","camaieu","cache cache",
+  "pimkie","jennyfer","morgan","promod","grain de malice","la halle",
+  // Divers
+  "monoprix","carrefour","leclerc","intermarché","intermarche","aldi","lidl",
+  "action","gifi","noz","b&m","hema",
+];
+
+const MAX_REVIEWS = 400; // Au-dessus = probablement une grande enseigne
+
 // ─── Types internes ───────────────────────────────────────────────────────────
 
 interface RawBusiness {
@@ -11,6 +54,19 @@ interface RawBusiness {
   lng: number;
   types: string[];
   permanentlyClosed: boolean;
+  reviewsCount?: number;
+}
+
+// Vérifie si le nom correspond à une grande enseigne
+function isChain(name: string): boolean {
+  const lower = name.toLowerCase().trim();
+  return CHAIN_BLACKLIST.some((chain) => {
+    // Correspondance exacte ou début du nom
+    return lower === chain ||
+      lower.startsWith(chain + " ") ||
+      lower.startsWith(chain + "-") ||
+      lower.includes(" " + chain + " ");
+  });
 }
 
 // ─── Provider 1 : SerpAPI (rapide, 100/mois gratuit) ─────────────────────────
@@ -48,6 +104,7 @@ export async function searchViaSerpAPI(
         lng: (r.gps_coordinates as Record<string, number>)?.longitude || lng,
         types: [r.type as string || ""],
         permanentlyClosed: !!(r.permanently_closed),
+        reviewsCount: typeof r.reviews === "number" ? r.reviews : undefined,
       }));
 
     return results;
@@ -112,6 +169,7 @@ export async function searchViaApify(
           lng: loc?.lng || lng,
           types: [r.categoryName as string || ""],
           permanentlyClosed: !!(r.permanentlyClosed),
+          reviewsCount: typeof r.reviewsCount === "number" ? r.reviewsCount : undefined,
         };
       });
 
@@ -168,6 +226,12 @@ export function toBusiness(r: RawBusiness, type: string): Business | null {
   if (!r.name) return null;
   if (!r.phone) return null;
   if (r.permanentlyClosed) return null;
+
+  // Exclure les grandes enseignes connues
+  if (isChain(r.name)) return null;
+
+  // Exclure si trop d'avis (= grande enseigne ou franchise)
+  if (r.reviewsCount !== undefined && r.reviewsCount > MAX_REVIEWS) return null;
 
   return {
     place_id: `scrape-${r.lat}-${r.lng}-${r.name.replace(/\s/g, "")}`.slice(0, 80),
