@@ -2,6 +2,65 @@
 
 import { useState, useEffect } from "react";
 import { CRMEntry } from "@/lib/storage";
+import { AnalyseResult } from "@/app/api/analyse/route";
+
+const scoreColor  = (s: number) => s >= 7 ? "#22c55e" : s >= 5 ? "#f59e0b" : "#ef4444";
+const scoreBg     = (s: number) => s >= 7 ? "rgba(34,197,94,0.1)" : s >= 5 ? "rgba(245,158,11,0.1)" : "rgba(239,68,68,0.1)";
+const scoreBorder = (s: number) => s >= 7 ? "rgba(34,197,94,0.3)" : s >= 5 ? "rgba(245,158,11,0.3)" : "rgba(239,68,68,0.3)";
+const scoreLabel  = (s: number) => s >= 7 ? "Priorité haute" : s >= 5 ? "Priorité moyenne" : "Priorité basse";
+
+function AnalyseResultMini({ result }: { result: AnalyseResult }) {
+  const [copied, setCopied] = useState<number | null>(null);
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      {/* Score */}
+      <div style={{ display:"flex", alignItems:"center", gap:16, padding:"14px 18px", borderRadius:12, background:scoreBg(result.score_prospection), border:`1.5px solid ${scoreBorder(result.score_prospection)}` }}>
+        <div style={{ textAlign:"center", flexShrink:0 }}>
+          <div style={{ fontSize:36, fontWeight:900, color:scoreColor(result.score_prospection), lineHeight:1 }}>{result.score_prospection}</div>
+          <div style={{ fontSize:10, color:scoreColor(result.score_prospection), fontWeight:700 }}>/10</div>
+        </div>
+        <div>
+          <div style={{ fontSize:12, fontWeight:700, color:scoreColor(result.score_prospection), textTransform:"uppercase", letterSpacing:"0.06em" }}>{scoreLabel(result.score_prospection)}</div>
+          <div style={{ fontSize:13, color:"var(--text)", marginTop:4 }}>{result.raison_score}</div>
+        </div>
+      </div>
+      {/* Problèmes */}
+      {result.problemes_detectes?.length > 0 && (
+        <div>
+          <div style={{ fontSize:11, fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:6 }}>⚠️ Problèmes détectés</div>
+          <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+            {result.problemes_detectes.map((p, i) => (
+              <div key={i} style={{ fontSize:13, color:"var(--text)", padding:"6px 10px", borderRadius:8, background:"var(--surface2)", borderLeft:"2px solid rgba(239,68,68,0.4)" }}>{p}</div>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Phrases */}
+      {result.phrases_accroche?.length > 0 && (
+        <div>
+          <div style={{ fontSize:11, fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:6 }}>💬 Phrases d&apos;accroche</div>
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+            {result.phrases_accroche.map((p, i) => (
+              <div key={i} style={{ display:"flex", gap:8, alignItems:"flex-start", padding:"8px 10px", borderRadius:8, background:"var(--surface2)" }}>
+                <span style={{ fontSize:12, color:"var(--text)", flex:1, lineHeight:1.5 }}>{p}</span>
+                <button onClick={() => { navigator.clipboard.writeText(p); setCopied(i); setTimeout(() => setCopied(null), 1500); }} style={{
+                  background:"none", border:"1px solid var(--border)", borderRadius:6, cursor:"pointer", padding:"2px 6px",
+                  fontSize:11, color: copied===i ? "#22c55e" : "var(--muted)", flexShrink:0,
+                }}>{copied===i ? "✓" : "Copier"}</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Conseil */}
+      {result.conseil_global && (
+        <div style={{ padding:"10px 14px", borderRadius:10, background:"rgba(167,139,250,0.08)", border:"1px solid rgba(167,139,250,0.2)", fontSize:13, color:"var(--text)", lineHeight:1.6 }}>
+          💡 {result.conseil_global}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const STATUSES: { value: CRMEntry["status"]; label: string; color: string; bg: string; border: string }[] = [
   { value: "nouveau",       label: "Nouveau",        color: "#818cf8", bg: "rgba(99,102,241,0.12)",  border: "rgba(99,102,241,0.3)"  },
@@ -30,12 +89,12 @@ function formatRappel(iso: string) {
   };
 }
 
-type EntryWithId = CRMEntry & { id: string };
+type EntryWithId = CRMEntry & { id: string; analyse_score?: number; analyse_result?: AnalyseResult };
 
 interface DBEntry {
   id: string; business: CRMEntry["business"]; status: CRMEntry["status"];
   note: string; rappel_at: string | null; rappel_direction: CRMEntry["rappelDirection"];
-  site_cree: boolean; added_at: string;
+  site_cree: boolean; added_at: string; analyse_score?: number; analyse_result?: AnalyseResult;
 }
 
 export default function CRMPage({ businessId = "gensite" }: { businessId?: string }) {
@@ -46,6 +105,8 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
   const [editRappel, setEditRappel]     = useState<string | null>(null);
   const [rappelVal, setRappelVal]       = useState("");
   const [copiedPhone, setCopiedPhone]   = useState<string | null>(null);
+  const [analyseModal, setAnalyseModal] = useState<EntryWithId | null>(null);
+  const [analyseLoading, setAnalyseLoading] = useState(false);
 
   const reload = async () => {
     const r = await fetch(`/api/crm?businessId=${businessId}`);
@@ -55,6 +116,7 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
       id: e.id, business: e.business, status: e.status, note: e.note,
       rappelAt: e.rappel_at, rappelDirection: e.rappel_direction,
       siteCree: e.site_cree, addedAt: e.added_at, updatedAt: e.added_at,
+      analyse_score: e.analyse_score, analyse_result: e.analyse_result,
     })));
   };
   useEffect(() => { reload(); }, []);
@@ -82,6 +144,36 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
 
   const openMaps = (name: string, addr: string) =>
     window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name+" "+addr)}`, "_blank");
+
+  const runAnalyse = async (entry: EntryWithId) => {
+    // If already analysed, just open the modal
+    if (entry.analyse_result) { setAnalyseModal(entry); return; }
+    setAnalyseModal(entry);
+    setAnalyseLoading(true);
+    try {
+      const addrParts = entry.business.address?.split(",") ?? [];
+      const ville = addrParts.length > 1 ? addrParts[addrParts.length - 1].trim() : addrParts[0]?.trim() ?? "";
+      const r = await fetch("/api/analyse", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ nom: entry.business.name, ville, url: entry.business.website ?? "", businessId }),
+      });
+      if (!r.ok) throw new Error("Erreur API");
+      const result: AnalyseResult = await r.json();
+      // Save to DB
+      await fetch(`/api/crm/${entry.id}`, {
+        method:"PATCH", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ analyse_score: result.score_prospection, analyse_result: result }),
+      });
+      const updated = { ...entry, analyse_score: result.score_prospection, analyse_result: result };
+      setEntries((p) => p.map((e) => e.id === entry.id ? updated : e));
+      setAnalyseModal(updated);
+    } catch {
+      alert("Erreur lors de l'analyse.");
+      setAnalyseModal(null);
+    } finally {
+      setAnalyseLoading(false);
+    }
+  };
 
   /* ── Tri & filtres ────────────────────────────────────────────────────── */
   const filtered = (
@@ -158,6 +250,40 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
         </div>
       )}
 
+      {/* ── Modal Analyse IA ── */}
+      {analyseModal && (
+        <div onClick={() => { if (!analyseLoading) setAnalyseModal(null); }} style={{
+          position:"fixed", inset:0, zIndex:1000, background:"rgba(0,0,0,0.6)", backdropFilter:"blur(4px)",
+          display:"flex", alignItems:"center", justifyContent:"center", padding:16,
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{
+            background:"var(--surface)", borderRadius:16, border:"1px solid var(--border)",
+            width:"100%", maxWidth:560, maxHeight:"85vh", overflow:"auto", padding:24,
+            display:"flex", flexDirection:"column", gap:16,
+          }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+              <div>
+                <div style={{ fontSize:16, fontWeight:700, color:"var(--text)" }}>🤖 Analyse IA</div>
+                <div style={{ fontSize:13, color:"var(--muted)", marginTop:2 }}>{analyseModal.business.name}</div>
+              </div>
+              {!analyseLoading && (
+                <button onClick={() => setAnalyseModal(null)} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--muted)", fontSize:20, lineHeight:1 }}>✕</button>
+              )}
+            </div>
+
+            {analyseLoading ? (
+              <div style={{ padding:"40px 0", textAlign:"center", color:"var(--muted)" }}>
+                <div style={{ fontSize:32, marginBottom:12 }}>🤖</div>
+                <div style={{ fontWeight:600 }}>Analyse en cours…</div>
+                <div style={{ fontSize:12, marginTop:4 }}>Recherche d&apos;infos + analyse IA</div>
+              </div>
+            ) : analyseModal.analyse_result ? (
+              <AnalyseResultMini result={analyseModal.analyse_result} />
+            ) : null}
+          </div>
+        </div>
+      )}
+
       {/* ── Cards ── */}
       {filtered.map((entry) => {
         const st     = STATUSES.find((s) => s.value === entry.status) || STATUSES[0];
@@ -229,6 +355,17 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
               {/* Actions */}
               <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0 }}>
                 <button onClick={() => openMaps(b.name, b.address)} className="btn btn-ghost btn-sm">📍 Maps</button>
+                {businessId === "copywriting" && (
+                  <button onClick={() => runAnalyse(entry)} style={{
+                    padding:"5px 10px", borderRadius:8, border:"1px solid",
+                    borderColor: entry.analyse_score ? (entry.analyse_score >= 7 ? "rgba(34,197,94,0.4)" : entry.analyse_score >= 5 ? "rgba(245,158,11,0.4)" : "rgba(239,68,68,0.4)") : "rgba(167,139,250,0.3)",
+                    background:  entry.analyse_score ? (entry.analyse_score >= 7 ? "rgba(34,197,94,0.1)" : entry.analyse_score >= 5 ? "rgba(245,158,11,0.1)" : "rgba(239,68,68,0.1)") : "rgba(167,139,250,0.08)",
+                    color:       entry.analyse_score ? (entry.analyse_score >= 7 ? "#22c55e" : entry.analyse_score >= 5 ? "#f59e0b" : "#ef4444") : "#a78bfa",
+                    fontSize:11, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:4, whiteSpace:"nowrap",
+                  }}>
+                    🤖 {entry.analyse_score ? `Score ${entry.analyse_score}/10` : "Analyser"}
+                  </button>
+                )}
                 <button onClick={() => remove(entry.id)} className="btn btn-danger btn-sm">🗑 Retirer</button>
               </div>
             </div>
