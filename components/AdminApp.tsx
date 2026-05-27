@@ -6,7 +6,7 @@ import CRMPage from "./CRMPage";
 import SettingsPage from "./SettingsPage";
 import SearchPage from "./SearchPage";
 import CalendarPage from "./CalendarPage";
-import AnalysePage from "./AnalysePage";
+import AnalysePage, { AnalyseState } from "./AnalysePage";
 import { Business } from "@/app/api/search/route";
 import { getBusinessConfig } from "@/lib/businesses";
 
@@ -36,6 +36,7 @@ const PAGE_TITLES: Record<string, { title: string; sub: string }> = {
 export default function AdminApp({ session, onLogout, businessId, onChangeBusiness }: Props) {
   const [view, setView] = useState("search");
   const [searchLeads, setSearchLeads] = useState<Business[]>([]);
+  const [analyseState, setAnalyseState] = useState<AnalyseState>({ nom: "", ville: "", url: "", result: null });
 
   const page = PAGE_TITLES[view] || PAGE_TITLES.search;
   const biz = getBusinessConfig(businessId);
@@ -68,7 +69,7 @@ export default function AdminApp({ session, onLogout, businessId, onChangeBusine
 
         <div className="content">
           {view === "search"   && <SearchPage onResultsChange={setSearchLeads} businessId={businessId} />}
-          {view === "analyse"  && <AnalysePage businessId={businessId} />}
+          {view === "analyse"  && <AnalysePage businessId={businessId} state={analyseState} onStateChange={setAnalyseState} />}
           {view === "crm"      && <CRMPage businessId={businessId} />}
           {view === "calendar" && <CalendarPage businessId={businessId} />}
           {view === "settings" && <SettingsPage currentLeads={searchLeads} businessId={businessId} />}

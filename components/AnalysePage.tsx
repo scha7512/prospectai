@@ -3,15 +3,28 @@
 import { useState } from "react";
 import { AnalyseResult } from "@/app/api/analyse/route";
 
-interface Props { businessId?: string; }
+export interface AnalyseState {
+  nom: string;
+  ville: string;
+  url: string;
+  result: AnalyseResult | null;
+}
 
-export default function AnalysePage({ businessId = "gensite" }: Props) {
-  const [nom, setNom]   = useState("");
-  const [ville, setVille] = useState("");
-  const [url, setUrl]   = useState("");
+interface Props {
+  businessId?: string;
+  state: AnalyseState;
+  onStateChange: (s: AnalyseState) => void;
+}
+
+export default function AnalysePage({ businessId = "gensite", state, onStateChange }: Props) {
+  const { nom, ville, url, result } = state;
+  const setNom   = (v: string) => onStateChange({ ...state, nom: v });
+  const setVille = (v: string) => onStateChange({ ...state, ville: v });
+  const setUrl   = (v: string) => onStateChange({ ...state, url: v });
+  const setResult = (v: AnalyseResult | null) => onStateChange({ ...state, result: v });
+
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState("");
-  const [result, setResult] = useState<AnalyseResult | null>(null);
   const [copied, setCopied] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved]   = useState(false);
@@ -265,7 +278,7 @@ export default function AnalysePage({ businessId = "gensite" }: Props) {
                 {saving ? <><span className="spinner" /> Ajout…</> : "➕ Ajouter au CRM"}
               </button>
             )}
-            <button onClick={() => { setResult(null); setNom(""); setVille(""); setUrl(""); setSaved(false); }}
+            <button onClick={() => { onStateChange({ nom: "", ville: "", url: "", result: null }); setSaved(false); }}
               className="btn btn-ghost">
               Nouvelle analyse
             </button>
