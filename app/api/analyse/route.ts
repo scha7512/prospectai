@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 
-const SYSTEM_PROMPT = `Tu es un expert copywriter professionnel francophone. On t'a fourni les informations d'une entreprise locale. Analyse ces informations comme un vrai copywriter pro qui veut aider cette entreprise à avoir plus de clients.
+// ── Prompt GenSite : entreprises sans site web ────────────────────────────────
+const PROMPT_GENSITE = `Tu es un expert en création de sites web et en prospection commerciale francophone. On t'a fourni les informations d'une entreprise locale qui n'a pas (ou peu) de présence en ligne. Analyse ces informations comme un commercial web qui veut leur vendre un site internet.
 
 Tu dois produire :
-1. Un score de priorité de prospection de 1 à 10 (10 = très urgent de les contacter)
-2. La raison de ce score en une phrase
-3. Les problèmes de copywriting détectés (textes génériques, pas d'émotion, pas d'appel à l'action, promesses floues, etc.)
-4. 4 phrases d'accroche concrètes que le copywriter dira au téléphone pour faire ouvrir les yeux au prospect
-5. Un conseil global court
+1. Un score de priorité de prospection de 1 à 10 (10 = très urgent de les contacter car ils ont absolument besoin d'un site)
+2. La raison de ce score en une phrase (pourquoi ils ont besoin d'un site web maintenant)
+3. Les problèmes détectés liés à l'absence de site web (pas de visibilité en ligne, clients perdus, concurrents mieux positionnés, etc.)
+4. 4 phrases d'accroche concrètes pour convaincre le patron au téléphone qu'un site web lui ferait gagner des clients
+5. Un conseil global court sur l'approche commerciale
 
 Réponds UNIQUEMENT en JSON valide, sans markdown, sans backticks :
 {
@@ -17,6 +18,27 @@ Réponds UNIQUEMENT en JSON valide, sans markdown, sans backticks :
   "problemes_detectes": ["problème 1", "problème 2"],
   "phrases_accroche": ["phrase 1", "phrase 2", "phrase 3", "phrase 4"],
   "conseil_global": "paragraphe court"
+}`;
+
+// ── Prompt Copywriting : qualité des textes et annonces ───────────────────────
+const PROMPT_COPYWRITING = `Tu es un expert copywriter francophone spécialisé dans la rédaction d'annonces et de contenus qui vendent. On t'a fourni les informations d'une entreprise. Ton rôle est d'analyser la qualité de leur communication écrite et de les convaincre qu'un copywriter professionnel leur ferait gagner plus de clients.
+
+Contexte important : tu proposes tes services de copywriting. Pour une agence immobilière, cela signifie réécrire leurs annonces de biens pour qu'elles donnent vraiment envie aux acheteurs ou locataires — des descriptions qui racontent une histoire, créent une émotion, font rêver plutôt que de simplement lister des caractéristiques. Pour une agence de voyage, des itinéraires qui font saliver. Pour un cabinet de recrutement, des offres d'emploi qui attirent vraiment les talents. Etc.
+
+Tu dois produire :
+1. Un score de priorité de prospection de 1 à 10 (10 = leurs textes sont catastrophiques, énorme opportunité)
+2. La raison de ce score en une phrase précise
+3. Les problèmes de copywriting concrets détectés : annonces froides et factuelles, pas d'émotion, pas de storytelling, descriptions génériques ("bel appartement lumineux 3 pièces"), aucun mot qui donne envie, pas de projection, pas d'appel à l'action, promesses vagues, etc.
+4. 4 phrases d'accroche percutantes pour convaincre le responsable au téléphone — montrer qu'on a vu leurs annonces, qu'on sait ce qui cloche, et ce qu'un bon copywriting leur apporterait concrètement (plus de visites, plus de mandats, des biens qui se louent plus vite, etc.)
+5. Un exemple concret : prendre un de leurs types d'annonces typiques et montrer la différence entre leur version fade et ce qu'un copywriter produirait (une ou deux phrases seulement, très percutantes)
+
+Réponds UNIQUEMENT en JSON valide, sans markdown, sans backticks :
+{
+  "score_prospection": 8,
+  "raison_score": "explication courte et précise",
+  "problemes_detectes": ["problème concret 1", "problème concret 2", "problème concret 3"],
+  "phrases_accroche": ["phrase 1", "phrase 2", "phrase 3", "phrase 4"],
+  "conseil_global": "exemple avant/après + conseil"
 }`;
 
 interface PlacesResult {
@@ -86,8 +108,10 @@ export async function POST(req: NextRequest) {
   const groqKey = process.env.GROQ_API_KEY;
   if (!groqKey) return NextResponse.json({ error: "Clé GROQ manquante dans .env" }, { status: 500 });
 
-  const { nom, ville, url } = await req.json();
+  const { nom, ville, url, businessId = "gensite" } = await req.json();
   if (!nom || !ville) return NextResponse.json({ error: "Nom et ville requis" }, { status: 400 });
+
+  const systemPrompt = businessId === "copywriting" ? PROMPT_COPYWRITING : PROMPT_GENSITE;
 
   // ── 1. Infos Google Places ──────────────────────────────────────────────────
   let placesInfo: PlacesResult | null = null;
@@ -130,7 +154,7 @@ export async function POST(req: NextRequest) {
     body: JSON.stringify({
       model: "llama-3.3-70b-versatile",
       messages: [
-        { role: "system",  content: SYSTEM_PROMPT },
+        { role: "system",  content: systemPrompt },
         { role: "user",    content: userMessage },
       ],
       temperature: 0.7,

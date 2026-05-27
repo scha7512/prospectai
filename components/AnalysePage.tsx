@@ -36,7 +36,7 @@ export default function AnalysePage({ businessId = "gensite", state, onStateChan
       const r = await fetch("/api/analyse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nom: nom.trim(), ville: ville.trim(), url: url.trim() || undefined }),
+        body: JSON.stringify({ nom: nom.trim(), ville: ville.trim(), url: url.trim() || undefined, businessId }),
       });
       const data = await r.json();
       if (!r.ok) { setError(data.error || "Erreur inconnue"); return; }

@@ -17,7 +17,14 @@ interface Props {
   onChangeBusiness?: () => void;
 }
 
-const NAV = [
+const NAV_GENSITE = [
+  { id: "search",   icon: "🔍", label: "Recherche" },
+  { id: "crm",      icon: "📋", label: "Mon CRM" },
+  { id: "calendar", icon: "📅", label: "Calendrier" },
+  { id: "settings", icon: "⚙️", label: "Paramètres" },
+];
+
+const NAV_COPYWRITING = [
   { id: "search",   icon: "🔍", label: "Recherche" },
   { id: "analyse",  icon: "🤖", label: "Analyse IA" },
   { id: "crm",      icon: "📋", label: "Mon CRM" },
@@ -38,6 +45,7 @@ export default function AdminApp({ session, onLogout, businessId, onChangeBusine
   const [searchLeads, setSearchLeads] = useState<Business[]>([]);
   const [analyseState, setAnalyseState] = useState<AnalyseState>({ nom: "", ville: "", url: "", result: null });
 
+  const NAV = businessId === "copywriting" ? NAV_COPYWRITING : NAV_GENSITE;
   const page = PAGE_TITLES[view] || PAGE_TITLES.search;
   const biz = getBusinessConfig(businessId);
 
