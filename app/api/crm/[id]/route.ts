@@ -21,6 +21,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       rappel_at = ${patch.rappel_at !== undefined ? patch.rappel_at : sql`rappel_at`},
       rappel_direction = ${patch.rappel_direction !== undefined ? patch.rappel_direction : sql`rappel_direction`},
       site_cree = COALESCE(${patch.site_cree ?? null}, site_cree),
+      analyse_score = COALESCE(${patch.analyse_score ?? null}, analyse_score),
+      analyse_result = ${patch.analyse_result !== undefined ? JSON.stringify(patch.analyse_result) : sql`analyse_result`},
       updated_at = now()
     WHERE id = ${id}
     RETURNING *
