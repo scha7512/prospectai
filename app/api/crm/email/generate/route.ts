@@ -7,14 +7,14 @@ export interface EmailResult {
 }
 
 // Vocabulaire par secteur
-const SECTOR_VOCAB: Record<string, { textes: string; benefice: string; cible: string }> = {
-  real_estate_agency:  { textes: "annonces immobilières", benefice: "des biens qui partent plus vite",           cible: "agences" },
-  recruitment_agency:  { textes: "fiches de poste",       benefice: "attirer plus de candidats qualifiés",       cible: "cabinets" },
-  travel_agency:       { textes: "descriptions de séjours", benefice: "donner envie de réserver",               cible: "agences" },
-  concierge:           { textes: "descriptions de services", benefice: "inspirer confiance dès le premier regard", cible: "services de conciergerie" },
-  event_agency:        { textes: "présentations d'événements", benefice: "remplir vos événements plus facilement", cible: "agences événementielles" },
-  property_developer:  { textes: "descriptions de programmes", benefice: "générer plus de demandes de visite",   cible: "promoteurs" },
-  seasonal_rental:     { textes: "annonces de location",    benefice: "augmenter le taux de réservation",        cible: "propriétaires" },
+const SECTOR_VOCAB: Record<string, { textes: string; benefice: string; cible: string; subject: string }> = {
+  real_estate_agency:  { textes: "annonces immobilières",     benefice: "des biens qui partent plus vite",            cible: "agences",                  subject: "J'ai réécrit une de vos annonces — jetez un œil" },
+  recruitment_agency:  { textes: "fiches de poste",           benefice: "attirer plus de candidats qualifiés",        cible: "cabinets",                 subject: "J'ai réécrit une de vos fiches de poste — jetez un œil" },
+  travel_agency:       { textes: "descriptions de séjours",   benefice: "donner envie de réserver",                   cible: "agences",                  subject: "J'ai réécrit un de vos textes de séjour — jetez un œil" },
+  concierge:           { textes: "descriptions de services",  benefice: "inspirer confiance dès le premier regard",   cible: "services de conciergerie", subject: "J'ai réécrit un de vos textes de présentation — jetez un œil" },
+  event_agency:        { textes: "présentations d'événements",benefice: "remplir vos événements plus facilement",     cible: "agences événementielles",  subject: "J'ai réécrit un de vos textes d'événement — jetez un œil" },
+  property_developer:  { textes: "descriptions de programmes",benefice: "générer plus de demandes de visite",         cible: "promoteurs",               subject: "J'ai réécrit une de vos descriptions de programme — jetez un œil" },
+  seasonal_rental:     { textes: "annonces de location",      benefice: "augmenter le taux de réservation",           cible: "propriétaires",            subject: "J'ai réécrit une de vos annonces de location — jetez un œil" },
 };
 
 export async function POST(req: NextRequest) {
@@ -31,7 +31,11 @@ export async function POST(req: NextRequest) {
     textes: "textes de vente",
     benefice: "attirer plus de clients",
     cible: "entreprises",
+    subject: "J'ai réécrit un de vos textes — jetez un œil",
   };
+
+  // L'objet est fixe, construit dans le code selon le secteur
+  const subject = vocab.subject;
 
   // Contexte additionnel si on a un résultat d'analyse
   let analyseContext = "";
@@ -42,12 +46,11 @@ export async function POST(req: NextRequest) {
     if (phrase)    analyseContext += `\nUne phrase d'accroche déjà identifiée : "${phrase}"`;
   }
 
-  const prompt = `Tu es Sacha Tanton, copywriter freelance francophone. Tu dois écrire un email de prospection court et percutant pour ${businessName}, une entreprise du secteur : ${vocab.cible}.
+  const prompt = `Tu es Sacha Tanton, copywriter freelance francophone. Tu dois écrire le corps d'un email de prospection court et percutant pour ${businessName}, une entreprise du secteur : ${vocab.cible}.
 
 Contexte : tu proposes tes services de copywriting pour améliorer leurs ${vocab.textes}, avec comme bénéfice principal : ${vocab.benefice}.${analyseContext}
 
-L'email doit :
-- Avoir un objet accrocheur et personnalisé (mentionner l'entreprise ou une observation concrète)
+Le corps de l'email doit :
 - Commencer par "Bonjour," (pas de prénom)
 - Se présenter rapidement : "Je m'appelle Sacha, je réécris des ${vocab.textes} pour les ${vocab.cible}."
 - Inclure une phrase courte sur le bénéfice concret (${vocab.benefice})
@@ -55,11 +58,10 @@ L'email doit :
 - Finir par une question simple pour obtenir 5 minutes d'échange
 - Signature : Sacha Tanton / tantonsacha@gmail.com
 - Ton : professionnel mais humain, direct, sans fioritures. Pas de "j'espère que vous allez bien".
-- Longueur : maximum 8 lignes de corps
+- Longueur : maximum 8 lignes
 
 Réponds UNIQUEMENT en JSON valide, sans markdown, sans backticks :
 {
-  "subject": "Objet de l'email",
   "body": "Corps complet de l'email avec sauts de ligne représentés par \\n"
 }`;
 
@@ -83,6 +85,7 @@ Réponds UNIQUEMENT en JSON valide, sans markdown, sans backticks :
   const end   = raw.lastIndexOf("}");
   if (start === -1 || end === -1) return NextResponse.json({ error: "Réponse IA invalide" }, { status: 502 });
 
-  const result: EmailResult = JSON.parse(raw.slice(start, end + 1));
+  const parsed = JSON.parse(raw.slice(start, end + 1));
+  const result: EmailResult = { subject, body: parsed.body };
   return NextResponse.json(result);
 }
