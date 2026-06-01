@@ -73,6 +73,7 @@ const STATUSES: { value: CRMEntry["status"]; label: string; color: string; bg: s
   { value: "faux_num",      label: "Faux num",       color: "#e879f9", bg: "rgba(232,121,249,0.1)",  border: "rgba(232,121,249,0.25)"},
   { value: "ferme",         label: "Fermé",          color: "#64748b", bg: "rgba(100,116,139,0.1)",  border: "rgba(100,116,139,0.25)"},
   { value: "deja_installe", label: "Déjà installé",  color: "#2dd4bf", bg: "rgba(45,212,191,0.1)",   border: "rgba(45,212,191,0.25)" },
+  { value: "email_envoye", label: "Email envoyé",   color: "#38bdf8", bg: "rgba(56,189,248,0.1)",   border: "rgba(56,189,248,0.25)" },
 ];
 
 const JOURS = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
@@ -89,12 +90,14 @@ function formatRappel(iso: string) {
   };
 }
 
-type EntryWithId = CRMEntry & { id: string; analyse_score?: number; analyse_result?: AnalyseResult };
+interface EmailGenerated { subject: string; body: string; }
+type EntryWithId = CRMEntry & { id: string; analyse_score?: number; analyse_result?: AnalyseResult; prospect_email?: string; email_generated?: EmailGenerated; };
 
 interface DBEntry {
   id: string; business: CRMEntry["business"]; status: CRMEntry["status"];
   note: string; rappel_at: string | null; rappel_direction: CRMEntry["rappelDirection"];
   site_cree: boolean; added_at: string; analyse_score?: number; analyse_result?: AnalyseResult;
+  prospect_email?: string; email_generated?: EmailGenerated;
 }
 
 export default function CRMPage({ businessId = "gensite" }: { businessId?: string }) {
@@ -107,6 +110,10 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
   const [copiedPhone, setCopiedPhone]   = useState<string | null>(null);
   const [analyseModal, setAnalyseModal] = useState<EntryWithId | null>(null);
   const [analyseLoading, setAnalyseLoading] = useState(false);
+  const [emailModal, setEmailModal]     = useState<EntryWithId | null>(null);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [emailInputs, setEmailInputs]   = useState<Record<string, string>>({});
+  const [copiedEmail, setCopiedEmail]   = useState(false);
 
   const reload = async () => {
     const r = await fetch(`/api/crm?businessId=${businessId}`);
@@ -117,6 +124,7 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
       rappelAt: e.rappel_at, rappelDirection: e.rappel_direction,
       siteCree: e.site_cree, addedAt: e.added_at, updatedAt: e.added_at,
       analyse_score: e.analyse_score, analyse_result: e.analyse_result,
+      prospect_email: e.prospect_email, email_generated: e.email_generated,
     })));
   };
   useEffect(() => { reload(); }, []);
@@ -172,6 +180,41 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
       setAnalyseModal(null);
     } finally {
       setAnalyseLoading(false);
+    }
+  };
+
+  const patchRaw = async (id: string, data: Record<string, unknown>) => {
+    await fetch(`/api/crm/${id}`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify(data) });
+  };
+
+  const saveProspectEmail = async (entry: EntryWithId) => {
+    const val = emailInputs[entry.id] ?? entry.prospect_email ?? "";
+    setEntries((p) => p.map((e) => e.id === entry.id ? { ...e, prospect_email: val } : e));
+    await patchRaw(entry.id, { prospect_email: val });
+  };
+
+  const generateEmail = async (entry: EntryWithId) => {
+    // Si déjà généré, ouvrir directement la modal
+    if (entry.email_generated) { setEmailModal(entry); return; }
+    setEmailModal(entry);
+    setEmailLoading(true);
+    try {
+      const sector = entry.business.types?.[0] || "";
+      const r = await fetch("/api/crm/email/generate", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ businessName: entry.business.name, sector, analyse_result: entry.analyse_result }),
+      });
+      if (!r.ok) throw new Error("Erreur API");
+      const result: EmailGenerated = await r.json();
+      await patchRaw(entry.id, { email_generated: result });
+      const updated = { ...entry, email_generated: result };
+      setEntries((p) => p.map((e) => e.id === entry.id ? updated : e));
+      setEmailModal(updated);
+    } catch {
+      alert("Erreur lors de la génération de l'email.");
+      setEmailModal(null);
+    } finally {
+      setEmailLoading(false);
     }
   };
 
@@ -280,6 +323,87 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
             ) : analyseModal.analyse_result ? (
               <AnalyseResultMini result={analyseModal.analyse_result} />
             ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Email ── */}
+      {emailModal && (
+        <div onClick={() => { if (!emailLoading) setEmailModal(null); }} style={{
+          position:"fixed", inset:0, zIndex:1000, background:"rgba(0,0,0,0.6)", backdropFilter:"blur(4px)",
+          display:"flex", alignItems:"center", justifyContent:"center", padding:16,
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{
+            background:"var(--surface)", borderRadius:16, border:"1px solid var(--border)",
+            width:"100%", maxWidth:580, maxHeight:"85vh", overflow:"auto", padding:24,
+            display:"flex", flexDirection:"column", gap:16,
+          }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+              <div>
+                <div style={{ fontSize:16, fontWeight:700, color:"var(--text)" }}>📧 Email de prospection</div>
+                <div style={{ fontSize:13, color:"var(--muted)", marginTop:2 }}>{emailModal.business.name}</div>
+              </div>
+              {!emailLoading && (
+                <button onClick={() => setEmailModal(null)} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--muted)", fontSize:20, lineHeight:1 }}>✕</button>
+              )}
+            </div>
+
+            {emailLoading ? (
+              <div style={{ padding:"40px 0", textAlign:"center", color:"var(--muted)" }}>
+                <div style={{ fontSize:32, marginBottom:12 }}>✍️</div>
+                <div style={{ fontWeight:600 }}>Génération en cours…</div>
+                <div style={{ fontSize:12, marginTop:4 }}>Rédaction de l&apos;email personnalisé</div>
+              </div>
+            ) : emailModal.email_generated ? (() => {
+              const eg = emailModal.email_generated!;
+              const prospectEmail = emailModal.prospect_email || emailInputs[emailModal.id] || "";
+              const gmailUrl = `mailto:${encodeURIComponent(prospectEmail)}?subject=${encodeURIComponent(eg.subject)}&body=${encodeURIComponent(eg.body)}`;
+              return (
+                <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                  {/* Objet */}
+                  <div>
+                    <div style={{ fontSize:11, fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:6 }}>Objet</div>
+                    <div style={{ padding:"10px 14px", borderRadius:10, background:"var(--surface2)", border:"1px solid var(--border)", fontSize:14, fontWeight:600, color:"var(--text)" }}>
+                      {eg.subject}
+                    </div>
+                  </div>
+                  {/* Corps */}
+                  <div>
+                    <div style={{ fontSize:11, fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:6 }}>Corps</div>
+                    <div style={{ padding:"12px 14px", borderRadius:10, background:"var(--surface2)", border:"1px solid var(--border)", fontSize:13, color:"var(--text)", lineHeight:1.7, whiteSpace:"pre-line" }}>
+                      {eg.body}
+                    </div>
+                  </div>
+                  {/* Actions */}
+                  <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                    <button onClick={() => { navigator.clipboard.writeText(eg.body); setCopiedEmail(true); setTimeout(() => setCopiedEmail(false), 1500); }} style={{
+                      padding:"8px 16px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface2)",
+                      color: copiedEmail ? "#22c55e" : "var(--text)", fontSize:13, fontWeight:600, cursor:"pointer",
+                    }}>
+                      {copiedEmail ? "✓ Copié !" : "📋 Copier le corps"}
+                    </button>
+                    <a href={gmailUrl} style={{
+                      padding:"8px 16px", borderRadius:8, border:"1px solid rgba(56,189,248,0.4)",
+                      background:"rgba(56,189,248,0.1)", color:"#38bdf8",
+                      fontSize:13, fontWeight:600, cursor:"pointer", textDecoration:"none", display:"flex", alignItems:"center", gap:6,
+                    }}>
+                      📬 Ouvrir dans Gmail
+                    </a>
+                    <button onClick={() => {
+                      const updated = { ...emailModal, email_generated: undefined };
+                      setEntries((p) => p.map((e) => e.id === emailModal.id ? { ...e, email_generated: undefined } : e));
+                      patchRaw(emailModal.id, { email_generated: null });
+                      setEmailModal(null);
+                    }} style={{
+                      padding:"8px 16px", borderRadius:8, border:"1px solid var(--border)", background:"transparent",
+                      color:"var(--muted)", fontSize:12, cursor:"pointer",
+                    }}>
+                      🔄 Régénérer
+                    </button>
+                  </div>
+                </div>
+              );
+            })() : null}
           </div>
         </div>
       )}
@@ -454,6 +578,45 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
                 )}
               </div>
             </div>
+
+            {/* ── Ligne 3 : Email (Copywriting seulement) ── */}
+            {businessId === "copywriting" && (
+              <div style={{ borderTop:"1px solid var(--border)", padding:"12px 20px", display:"flex", gap:12, alignItems:"center", flexWrap:"wrap", background:"var(--surface2)" }}>
+                <span style={{ fontSize:10, fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.06em", flexShrink:0 }}>📧 Email</span>
+
+                {/* Badge "Email prêt" */}
+                {entry.email_generated && (
+                  <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background:"rgba(56,189,248,0.12)", color:"#38bdf8", border:"1px solid rgba(56,189,248,0.3)", flexShrink:0 }}>
+                    ✓ Email prêt
+                  </span>
+                )}
+
+                {/* Input email prospect */}
+                <input
+                  type="email"
+                  placeholder="Email du prospect…"
+                  value={emailInputs[entry.id] ?? entry.prospect_email ?? ""}
+                  onChange={(e) => setEmailInputs((p) => ({ ...p, [entry.id]: e.target.value }))}
+                  onBlur={() => saveProspectEmail(entry)}
+                  style={{
+                    flex:1, minWidth:180, padding:"5px 10px", borderRadius:8,
+                    border:"1px solid var(--border2)", background:"var(--surface)",
+                    color:"var(--text)", fontSize:12, outline:"none", fontFamily:"inherit",
+                  }}
+                />
+
+                {/* Bouton générer */}
+                <button onClick={() => generateEmail(entry)} style={{
+                  padding:"5px 12px", borderRadius:8, border:"1px solid",
+                  borderColor: entry.email_generated ? "rgba(56,189,248,0.4)" : "rgba(245,158,11,0.35)",
+                  background:  entry.email_generated ? "rgba(56,189,248,0.08)" : "rgba(245,158,11,0.08)",
+                  color:       entry.email_generated ? "#38bdf8" : "#f59e0b",
+                  fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0,
+                }}>
+                  {entry.email_generated ? "📧 Voir l'email" : "✨ Générer l'email"}
+                </button>
+              </div>
+            )}
           </div>
         );
       })}
