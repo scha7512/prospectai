@@ -34,8 +34,8 @@ export async function POST(req: NextRequest) {
     subject: "J'ai réécrit un de vos textes — jetez un œil",
   };
 
-  // L'objet est fixe, construit dans le code selon le secteur
-  const subject = vocab.subject;
+  // L'objet est fixe, identique pour tous les secteurs
+  const subject = "J'ai réécrit une de vos annonces — jetez un œil";
 
   // Contexte additionnel si on a un résultat d'analyse
   let analyseContext = "";
