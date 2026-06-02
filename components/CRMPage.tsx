@@ -114,8 +114,9 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailInputs, setEmailInputs]   = useState<Record<string, string>>({});
   const [copiedEmail, setCopiedEmail]   = useState(false);
-  const [scrapingEmail, setScrapingEmail] = useState<string | null>(null); // id du lead en cours
+  const [scrapingEmail, setScrapingEmail] = useState<string | null>(null);
   const [scrapeNotFound, setScrapeNotFound] = useState<Record<string, boolean>>({});
+  const [addedToGensite, setAddedToGensite] = useState<Record<string, boolean>>({});
 
   const reload = async () => {
     const r = await fetch(`/api/crm?businessId=${businessId}`);
@@ -193,6 +194,16 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
     const val = emailInputs[entry.id] ?? entry.prospect_email ?? "";
     setEntries((p) => p.map((e) => e.id === entry.id ? { ...e, prospect_email: val } : e));
     await patchRaw(entry.id, { prospect_email: val });
+  };
+
+  const sendToGensite = async (entry: EntryWithId) => {
+    try {
+      await fetch("/api/crm", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ business: entry.business, businessId: "gensite" }),
+      });
+      setAddedToGensite((p) => ({ ...p, [entry.id]: true }));
+    } catch { /* silencieux */ }
   };
 
   const scrapeEmail = async (entry: EntryWithId) => {
@@ -460,6 +471,16 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
                       {b.types[0]}
                     </span>
                   )}
+                  {/* Badge site web */}
+                  {b.hasWebsite ? (
+                    <span style={{ fontSize:11, padding:"2px 8px", borderRadius:6, background:"rgba(74,222,128,0.1)", color:"#4ade80", border:"1px solid rgba(74,222,128,0.25)", fontWeight:600 }}>
+                      🌐 A un site
+                    </span>
+                  ) : (
+                    <span style={{ fontSize:11, padding:"2px 8px", borderRadius:6, background:"rgba(248,113,113,0.1)", color:"#f87171", border:"1px solid rgba(248,113,113,0.25)", fontWeight:600 }}>
+                      🚫 Sans site
+                    </span>
+                  )}
                 </div>
                 <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
                   {b.address && (
@@ -515,6 +536,18 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
                     fontSize:11, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:4, whiteSpace:"nowrap",
                   }}>
                     🤖 {entry.analyse_score ? `Score ${entry.analyse_score}/10` : "Analyser"}
+                  </button>
+                )}
+                {businessId === "copywriting" && !b.hasWebsite && (
+                  <button onClick={() => sendToGensite(entry)} disabled={addedToGensite[entry.id]} style={{
+                    padding:"5px 10px", borderRadius:8, border:"1px solid",
+                    borderColor: addedToGensite[entry.id] ? "rgba(74,222,128,0.4)" : "rgba(99,102,241,0.4)",
+                    background:  addedToGensite[entry.id] ? "rgba(74,222,128,0.08)" : "rgba(99,102,241,0.08)",
+                    color:       addedToGensite[entry.id] ? "#4ade80" : "#818cf8",
+                    fontSize:11, fontWeight:700, cursor: addedToGensite[entry.id] ? "default" : "pointer",
+                    whiteSpace:"nowrap", display:"flex", alignItems:"center", gap:4,
+                  }}>
+                    {addedToGensite[entry.id] ? "✓ Ajouté" : "🌐 → GenSite"}
                   </button>
                 )}
                 <button onClick={() => remove(entry.id)} className="btn btn-danger btn-sm">🗑 Retirer</button>
