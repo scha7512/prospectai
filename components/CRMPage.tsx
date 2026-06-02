@@ -695,8 +695,12 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
                   </button>
                 </div>
 
-                {/* Message "aucun email trouvé" */}
-                {scrapeNotFound[entry.id] && (
+                {/* Message sous le champ */}
+                {!b.hasWebsite ? (
+                  <span style={{ fontSize:11, color:"var(--muted)", paddingLeft:2 }}>
+                    Pas de site web — email à trouver manuellement.
+                  </span>
+                ) : scrapeNotFound[entry.id] && (
                   <span style={{ fontSize:11, color:"#f87171", paddingLeft:2 }}>
                     Aucun email trouvé sur ce site.
                   </span>
