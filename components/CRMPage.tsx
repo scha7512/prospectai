@@ -91,13 +91,13 @@ function formatRappel(iso: string) {
 }
 
 interface EmailGenerated { subject: string; body: string; }
-type EntryWithId = CRMEntry & { id: string; analyse_score?: number; analyse_result?: AnalyseResult; prospect_email?: string; email_generated?: EmailGenerated; };
+type EntryWithId = CRMEntry & { id: string; analyse_score?: number; analyse_result?: AnalyseResult; prospect_email?: string; email_generated?: EmailGenerated; email_sent?: boolean; };
 
 interface DBEntry {
   id: string; business: CRMEntry["business"]; status: CRMEntry["status"];
   note: string; rappel_at: string | null; rappel_direction: CRMEntry["rappelDirection"];
   site_cree: boolean; added_at: string; analyse_score?: number; analyse_result?: AnalyseResult;
-  prospect_email?: string; email_generated?: EmailGenerated;
+  prospect_email?: string; email_generated?: EmailGenerated; email_sent?: boolean;
 }
 
 export default function CRMPage({ businessId = "gensite" }: { businessId?: string }) {
@@ -127,7 +127,7 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
       rappelAt: e.rappel_at, rappelDirection: e.rappel_direction,
       siteCree: e.site_cree, addedAt: e.added_at, updatedAt: e.added_at,
       analyse_score: e.analyse_score, analyse_result: e.analyse_result,
-      prospect_email: e.prospect_email, email_generated: e.email_generated,
+      prospect_email: e.prospect_email, email_generated: e.email_generated, email_sent: e.email_sent,
     })));
   };
   useEffect(() => { reload(); }, []);
@@ -421,7 +421,10 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
                       {copiedEmail ? "✓ Copié !" : "📋 Copier le corps"}
                     </button>
                     <a href={gmailUrl} onClick={() => {
-                      patch(emailModal.id, { status: "email_envoye" });
+                      const updated = { ...emailModal, email_sent: true };
+                      setEntries((p) => p.map((e) => e.id === emailModal.id ? { ...e, email_sent: true } : e));
+                      setEmailModal(updated);
+                      patchRaw(emailModal.id, { email_sent: true });
                     }} style={{
                       padding:"8px 16px", borderRadius:8, border:"1px solid rgba(56,189,248,0.4)",
                       background:"rgba(56,189,248,0.1)", color:"#38bdf8",
@@ -652,6 +655,22 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
                     <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background:"rgba(56,189,248,0.12)", color:"#38bdf8", border:"1px solid rgba(56,189,248,0.3)", flexShrink:0 }}>
                       ✓ Email prêt
                     </span>
+                  )}
+
+                  {/* Bouton toggle "Email envoyé" */}
+                  {entry.email_generated && (
+                    <button onClick={() => {
+                      const next = !entry.email_sent;
+                      setEntries((p) => p.map((e) => e.id === entry.id ? { ...e, email_sent: next } : e));
+                      patchRaw(entry.id, { email_sent: next });
+                    }} style={{
+                      padding:"2px 10px", borderRadius:20, border:"1px solid", fontSize:11, fontWeight:700, cursor:"pointer", flexShrink:0,
+                      borderColor: entry.email_sent ? "rgba(74,222,128,0.4)"  : "rgba(148,163,184,0.3)",
+                      background:  entry.email_sent ? "rgba(74,222,128,0.1)"  : "transparent",
+                      color:       entry.email_sent ? "#4ade80"               : "var(--muted)",
+                    }}>
+                      {entry.email_sent ? "📨 Envoyé" : "📨 Marquer envoyé"}
+                    </button>
                   )}
 
                   {/* Input email prospect */}
