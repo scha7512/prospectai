@@ -420,7 +420,9 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
                     }}>
                       {copiedEmail ? "✓ Copié !" : "📋 Copier le corps"}
                     </button>
-                    <a href={gmailUrl} style={{
+                    <a href={gmailUrl} onClick={() => {
+                      patch(emailModal.id, { status: "email_envoye" });
+                    }} style={{
                       padding:"8px 16px", borderRadius:8, border:"1px solid rgba(56,189,248,0.4)",
                       background:"rgba(56,189,248,0.1)", color:"#38bdf8",
                       fontSize:13, fontWeight:600, cursor:"pointer", textDecoration:"none", display:"flex", alignItems:"center", gap:6,
