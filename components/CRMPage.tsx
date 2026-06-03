@@ -395,7 +395,7 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
             ) : emailModal.email_generated ? (() => {
               const eg = emailModal.email_generated!;
               const prospectEmail = emailModal.prospect_email || emailInputs[emailModal.id] || "";
-              const gmailUrl = `mailto:${encodeURIComponent(prospectEmail)}?subject=${encodeURIComponent(eg.subject)}&body=${encodeURIComponent(eg.body)}`;
+              const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(prospectEmail)}&su=${encodeURIComponent(eg.subject)}&body=${encodeURIComponent(eg.body)}`;
               return (
                 <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
                   {/* Objet */}
@@ -420,7 +420,7 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
                     }}>
                       {copiedEmail ? "✓ Copié !" : "📋 Copier le corps"}
                     </button>
-                    <a href={gmailUrl} onClick={() => {
+                    <a href={gmailUrl} target="_blank" rel="noopener noreferrer" onClick={() => {
                       const updated = { ...emailModal, email_sent: true };
                       setEntries((p) => p.map((e) => e.id === emailModal.id ? { ...e, email_sent: true } : e));
                       setEmailModal(updated);
