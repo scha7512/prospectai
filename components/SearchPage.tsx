@@ -61,24 +61,28 @@ export default function SearchPage({ onResultsChange, businessId = "gensite" }: 
       setStats({ total, noWebsite: noWeb, withWebsite: withWeb });
       onResultsChange(sorted);
 
-      // Copywriting : scraping email en arrière-plan pour les leads avec site
+      // Copywriting : scraping email en arrière-plan pour tous les leads avec site (Promise.all)
       if (businessId === "copywriting") {
         const withSite = sorted.filter((b) => b.hasWebsite && b.website);
-        const loading: Record<string, string | null | "loading"> = {};
-        withSite.forEach((b) => { loading[b.place_id] = "loading"; });
-        setScrapedEmails(loading);
-        withSite.forEach(async (b) => {
-          try {
-            const r = await fetch("/api/crm/scrape-email", {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ website: b.website }),
-            });
-            const { email } = await r.json();
-            setScrapedEmails((p) => ({ ...p, [b.place_id]: email ?? null }));
-          } catch {
-            setScrapedEmails((p) => ({ ...p, [b.place_id]: null }));
-          }
-        });
+        const noSite   = sorted.filter((b) => !b.hasWebsite);
+        const initState: Record<string, string | null | "loading"> = {};
+        withSite.forEach((b) => { initState[b.place_id] = "loading"; });
+        noSite.forEach((b)   => { initState[b.place_id] = null; });
+        setScrapedEmails(initState);
+        Promise.all(
+          withSite.map(async (b) => {
+            try {
+              const r = await fetch("/api/crm/scrape-email", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ website: b.website }),
+              });
+              const { email } = await r.json();
+              setScrapedEmails((p) => ({ ...p, [b.place_id]: email ?? null }));
+            } catch {
+              setScrapedEmails((p) => ({ ...p, [b.place_id]: null }));
+            }
+          })
+        );
       }
       const sectorLabels = sectors.map((s) => SECTORS.find((x) => x.type === s)?.label || s);
       saveSearch({ label: `${city} — ${sectorLabels.join(", ")}`, city, sectors, date: new Date().toISOString(), results: sorted });

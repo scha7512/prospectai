@@ -114,21 +114,55 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailInputs, setEmailInputs]   = useState<Record<string, string>>({});
   const [copiedEmail, setCopiedEmail]   = useState(false);
-  const [scrapingEmail, setScrapingEmail] = useState<string | null>(null);
-  const [scrapeNotFound, setScrapeNotFound] = useState<Record<string, boolean>>({});
+  const [scrapedEmails, setScrapedEmails] = useState<Record<string, string | null | "loading">>({});
   const [addedToGensite, setAddedToGensite] = useState<Record<string, boolean>>({});
+  const [emailSendingDirect, setEmailSendingDirect] = useState<Record<string, boolean>>({});
 
   const reload = async () => {
     const r = await fetch(`/api/crm?businessId=${businessId}`);
     if (!r.ok) return;
     const data: DBEntry[] = await r.json();
-    setEntries(data.map((e) => ({
+    const mapped = data.map((e) => ({
       id: e.id, business: e.business, status: e.status, note: e.note,
       rappelAt: e.rappel_at, rappelDirection: e.rappel_direction,
       siteCree: e.site_cree, addedAt: e.added_at, updatedAt: e.added_at,
       analyse_score: e.analyse_score, analyse_result: e.analyse_result,
       prospect_email: e.prospect_email, email_generated: e.email_generated, email_sent: e.email_sent,
-    })));
+    }));
+    setEntries(mapped);
+
+    // Copywriting : scraping automatique pour les leads avec site et sans email (Promise.all)
+    if (businessId === "copywriting") {
+      const toScrape = mapped.filter((e) => e.business.website && !e.prospect_email);
+      const alreadyHave = mapped.filter((e) => e.prospect_email);
+      const noWebsite   = mapped.filter((e) => !e.business.website);
+      const initState: Record<string, string | null | "loading"> = {};
+      toScrape.forEach((e)    => { initState[e.id] = "loading"; });
+      alreadyHave.forEach((e) => { initState[e.id] = e.prospect_email!; });
+      noWebsite.forEach((e)   => { initState[e.id] = null; });
+      setScrapedEmails(initState);
+      Promise.all(
+        toScrape.map(async (entry) => {
+          try {
+            const res = await fetch("/api/crm/scrape-email", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ website: entry.business.website }),
+            });
+            const { email } = await res.json();
+            setScrapedEmails((p) => ({ ...p, [entry.id]: email ?? null }));
+            if (email) {
+              setEntries((p) => p.map((e) => e.id === entry.id ? { ...e, prospect_email: email } : e));
+              await fetch(`/api/crm/${entry.id}`, {
+                method: "PATCH", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ prospect_email: email }),
+              });
+            }
+          } catch {
+            setScrapedEmails((p) => ({ ...p, [entry.id]: null }));
+          }
+        })
+      );
+    }
   };
   useEffect(() => { reload(); }, []);
 
@@ -206,29 +240,19 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
     } catch { /* silencieux */ }
   };
 
-  const scrapeEmail = async (entry: EntryWithId) => {
-    const website = entry.business.website;
-    if (!website) return;
-    setScrapingEmail(entry.id);
-    setScrapeNotFound((p) => ({ ...p, [entry.id]: false }));
+  const sendEmailDirect = async (entry: EntryWithId, email: string) => {
+    setEmailSendingDirect((p) => ({ ...p, [entry.id]: true }));
     try {
-      const r = await fetch("/api/crm/scrape-email", {
+      const sector = entry.business.types?.[0] || "";
+      const r = await fetch("/api/crm/email/generate", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ website }),
+        body: JSON.stringify({ businessName: entry.business.name, sector, analyse_result: entry.analyse_result }),
       });
-      const { email } = await r.json();
-      if (email) {
-        setEmailInputs((p) => ({ ...p, [entry.id]: email }));
-        setEntries((p) => p.map((e) => e.id === entry.id ? { ...e, prospect_email: email } : e));
-        await patchRaw(entry.id, { prospect_email: email });
-      } else {
-        setScrapeNotFound((p) => ({ ...p, [entry.id]: true }));
-      }
-    } catch {
-      setScrapeNotFound((p) => ({ ...p, [entry.id]: true }));
-    } finally {
-      setScrapingEmail(null);
-    }
+      const { subject, body } = await r.json();
+      const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.open(gmailUrl, "_blank");
+    } catch { /* silencieux */ }
+    finally { setEmailSendingDirect((p) => ({ ...p, [entry.id]: false })); }
   };
 
   const generateEmail = async (entry: EntryWithId) => {
@@ -645,89 +669,108 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
             </div>
 
             {/* ── Ligne 3 : Email (Copywriting seulement) ── */}
-            {businessId === "copywriting" && (
-              <div style={{ borderTop:"1px solid var(--border)", padding:"12px 20px", display:"flex", flexDirection:"column", gap:8, background:"var(--surface2)" }}>
-                <div style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" }}>
-                  <span style={{ fontSize:10, fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.06em", flexShrink:0 }}>📧 Email</span>
+            {businessId === "copywriting" && (() => {
+              const emailState   = scrapedEmails[entry.id];
+              const isLoading    = emailState === "loading";
+              const foundEmail   = typeof emailState === "string" && emailState !== "loading" ? emailState : (entry.prospect_email || null);
+              const notFound     = !isLoading && !foundEmail;
+              return (
+                <div style={{ borderTop:"1px solid var(--border)", padding:"12px 20px", display:"flex", flexDirection:"column", gap:8, background:"var(--surface2)" }}>
+                  {/* Ligne principale */}
+                  <div style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" }}>
+                    <span style={{ fontSize:10, fontWeight:700, color:"var(--muted)", textTransform:"uppercase", letterSpacing:"0.06em", flexShrink:0 }}>📧 Email</span>
 
-                  {/* Badge "Email prêt" */}
-                  {entry.email_generated && (
-                    <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background:"rgba(56,189,248,0.12)", color:"#38bdf8", border:"1px solid rgba(56,189,248,0.3)", flexShrink:0 }}>
-                      ✓ Email prêt
-                    </span>
-                  )}
+                    {/* État scraping */}
+                    {isLoading && (
+                      <span style={{ fontSize:11, color:"var(--muted)", display:"flex", alignItems:"center", gap:4 }}>🔍 Recherche email...</span>
+                    )}
+                    {foundEmail && (
+                      <>
+                        <span style={{ fontSize:12, color:"#4ade80", fontWeight:600 }}>{foundEmail}</span>
+                        <button
+                          onClick={() => sendEmailDirect(entry, foundEmail)}
+                          disabled={emailSendingDirect[entry.id]}
+                          style={{
+                            padding:"4px 10px", borderRadius:8, border:"1px solid rgba(56,189,248,0.4)",
+                            background:"rgba(56,189,248,0.08)", color:"#38bdf8",
+                            fontSize:11, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0,
+                            opacity: emailSendingDirect[entry.id] ? 0.6 : 1,
+                          }}>
+                          {emailSendingDirect[entry.id] ? "…" : "📧 Envoyer un mail"}
+                        </button>
+                      </>
+                    )}
+                    {notFound && (
+                      <>
+                        <span style={{ fontSize:11, color:"#f87171" }}>Aucun email</span>
+                        {b.phone && (
+                          <button onClick={() => copyPhone(b.phone!, entry.id)} style={{
+                            padding:"4px 10px", borderRadius:8, border:"1px solid rgba(248,113,113,0.3)",
+                            background:"rgba(248,113,113,0.06)", color:"#f87171",
+                            fontSize:11, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap",
+                          }}>
+                            {copiedPhone === entry.id ? "✓ Copié !" : "📞 Appeler"}
+                          </button>
+                        )}
+                      </>
+                    )}
 
-                  {/* Bouton toggle "Email envoyé" */}
-                  {entry.email_generated && (
-                    <button onClick={() => {
-                      const next = !entry.email_sent;
-                      setEntries((p) => p.map((e) => e.id === entry.id ? { ...e, email_sent: next } : e));
-                      patchRaw(entry.id, { email_sent: next });
-                    }} style={{
-                      padding:"2px 10px", borderRadius:20, border:"1px solid", fontSize:11, fontWeight:700, cursor:"pointer", flexShrink:0,
-                      borderColor: entry.email_sent ? "rgba(74,222,128,0.4)"  : "rgba(148,163,184,0.3)",
-                      background:  entry.email_sent ? "rgba(74,222,128,0.1)"  : "transparent",
-                      color:       entry.email_sent ? "#4ade80"               : "var(--muted)",
-                    }}>
-                      {entry.email_sent ? "📨 Envoyé" : "📨 Marquer envoyé"}
-                    </button>
-                  )}
+                    {/* Séparateur */}
+                    <div style={{ width:1, height:16, background:"var(--border)", flexShrink:0 }} />
 
-                  {/* Input email prospect */}
-                  <input
-                    type="email"
-                    placeholder="Email du prospect…"
-                    value={emailInputs[entry.id] ?? entry.prospect_email ?? ""}
-                    onChange={(e) => setEmailInputs((p) => ({ ...p, [entry.id]: e.target.value }))}
-                    onBlur={() => saveProspectEmail(entry)}
-                    style={{
-                      flex:1, minWidth:160, padding:"5px 10px", borderRadius:8,
-                      border:"1px solid var(--border2)", background:"var(--surface)",
-                      color:"var(--text)", fontSize:12, outline:"none", fontFamily:"inherit",
-                    }}
-                  />
-
-                  {/* Bouton scraping — uniquement si le lead a un site web */}
-                  {b.website && (
-                    <button
-                      onClick={() => scrapeEmail(entry)}
-                      disabled={scrapingEmail === entry.id}
+                    {/* Input email manuel */}
+                    <input
+                      type="email"
+                      placeholder="Email manuel…"
+                      value={emailInputs[entry.id] ?? entry.prospect_email ?? ""}
+                      onChange={(e) => setEmailInputs((p) => ({ ...p, [entry.id]: e.target.value }))}
+                      onBlur={() => saveProspectEmail(entry)}
                       style={{
-                        padding:"5px 10px", borderRadius:8, border:"1px solid rgba(148,163,184,0.35)",
-                        background:"rgba(148,163,184,0.06)", color:"var(--muted)",
-                        fontSize:11, fontWeight:600, cursor: scrapingEmail === entry.id ? "not-allowed" : "pointer",
-                        whiteSpace:"nowrap", flexShrink:0, opacity: scrapingEmail === entry.id ? 0.7 : 1,
-                        display:"flex", alignItems:"center", gap:4,
+                        flex:1, minWidth:140, padding:"4px 8px", borderRadius:8,
+                        border:"1px solid var(--border2)", background:"var(--surface)",
+                        color:"var(--text)", fontSize:12, outline:"none", fontFamily:"inherit",
                       }}
-                    >
-                      {scrapingEmail === entry.id ? "🔍 Recherche…" : "🔍 Trouver l'email"}
+                    />
+
+                    {/* Bouton générer email (modal) */}
+                    <button onClick={() => generateEmail(entry)} style={{
+                      padding:"4px 10px", borderRadius:8, border:"1px solid",
+                      borderColor: entry.email_generated ? "rgba(56,189,248,0.4)" : "rgba(245,158,11,0.35)",
+                      background:  entry.email_generated ? "rgba(56,189,248,0.08)" : "rgba(245,158,11,0.08)",
+                      color:       entry.email_generated ? "#38bdf8" : "#f59e0b",
+                      fontSize:11, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0,
+                    }}>
+                      {entry.email_generated ? "✉️ Voir l'email" : "✨ Générer l'email"}
                     </button>
+                  </div>
+
+                  {/* Badges bas */}
+                  {(entry.email_generated || entry.email_sent !== undefined) && (
+                    <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                      {entry.email_generated && (
+                        <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background:"rgba(56,189,248,0.12)", color:"#38bdf8", border:"1px solid rgba(56,189,248,0.3)" }}>
+                          ✓ Email prêt
+                        </span>
+                      )}
+                      {entry.email_generated && (
+                        <button onClick={() => {
+                          const next = !entry.email_sent;
+                          setEntries((p) => p.map((e) => e.id === entry.id ? { ...e, email_sent: next } : e));
+                          patchRaw(entry.id, { email_sent: next });
+                        }} style={{
+                          padding:"2px 10px", borderRadius:20, border:"1px solid", fontSize:11, fontWeight:700, cursor:"pointer",
+                          borderColor: entry.email_sent ? "rgba(74,222,128,0.4)" : "rgba(148,163,184,0.3)",
+                          background:  entry.email_sent ? "rgba(74,222,128,0.1)" : "transparent",
+                          color:       entry.email_sent ? "#4ade80"              : "var(--muted)",
+                        }}>
+                          {entry.email_sent ? "📨 Envoyé" : "📨 Marquer envoyé"}
+                        </button>
+                      )}
+                    </div>
                   )}
-
-                  {/* Bouton générer email */}
-                  <button onClick={() => generateEmail(entry)} style={{
-                    padding:"5px 12px", borderRadius:8, border:"1px solid",
-                    borderColor: entry.email_generated ? "rgba(56,189,248,0.4)" : "rgba(245,158,11,0.35)",
-                    background:  entry.email_generated ? "rgba(56,189,248,0.08)" : "rgba(245,158,11,0.08)",
-                    color:       entry.email_generated ? "#38bdf8" : "#f59e0b",
-                    fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0,
-                  }}>
-                    {entry.email_generated ? "📧 Voir l'email" : "✨ Générer l'email"}
-                  </button>
                 </div>
-
-                {/* Message sous le champ */}
-                {!b.hasWebsite ? (
-                  <span style={{ fontSize:11, color:"var(--muted)", paddingLeft:2 }}>
-                    Pas de site web — email à trouver manuellement.
-                  </span>
-                ) : scrapeNotFound[entry.id] && (
-                  <span style={{ fontSize:11, color:"#f87171", paddingLeft:2 }}>
-                    Aucun email trouvé sur ce site.
-                  </span>
-                )}
-              </div>
-            )}
+              );
+            })()}
           </div>
         );
       })}
