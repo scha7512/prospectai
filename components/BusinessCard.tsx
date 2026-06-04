@@ -15,11 +15,13 @@ const TYPE_LABELS: Record<string, string> = {
 
 interface Telepro { id: string; username: string; }
 
-export function BusinessTable({ businesses, onAddToCRM, onAddAllToCRM, addedIds }: {
+export function BusinessTable({ businesses, onAddToCRM, onAddAllToCRM, addedIds, businessId = "gensite", scrapedEmails = {} }: {
   businesses: Business[];
   onAddToCRM: (b: Business) => void;
   onAddAllToCRM: () => void;
   addedIds: Set<string>;
+  businessId?: string;
+  scrapedEmails?: Record<string, string | null | "loading">;
 }) {
   const [copied, setCopied] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
@@ -27,6 +29,23 @@ export function BusinessTable({ businesses, onAddToCRM, onAddAllToCRM, addedIds 
   const [sendTo, setSendTo] = useState("");
   const [sending, setSending] = useState(false);
   const [sendMsg, setSendMsg] = useState("");
+  const [emailSending, setEmailSending] = useState<Record<string, boolean>>({});
+
+  const sendEmail = async (b: Business) => {
+    const email = scrapedEmails[b.place_id];
+    if (!email || email === "loading") return;
+    setEmailSending((p) => ({ ...p, [b.place_id]: true }));
+    try {
+      const r = await fetch("/api/crm/email/generate", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessName: b.name, sector: b.types[0] }),
+      });
+      const { subject, body } = await r.json();
+      const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.open(gmailUrl, "_blank");
+    } catch { /* silencieux */ }
+    finally { setEmailSending((p) => ({ ...p, [b.place_id]: false })); }
+  };
 
   useEffect(() => {
     fetch("/api/users").then((r) => r.json()).then((d) => {
@@ -123,7 +142,7 @@ export function BusinessTable({ businesses, onAddToCRM, onAddAllToCRM, addedIds 
                 <input type="checkbox" checked={allChecked} onChange={toggleAll}
                   style={{ width: 15, height: 15, cursor: "pointer", accentColor: "var(--accent)" }} />
               </th>
-              {["Statut", "Nom", "Secteur", "Adresse", "Téléphone", "Site web", "Mon CRM", "Maps"].map((h) => (
+              {["Statut", "Nom", "Secteur", "Adresse", "Téléphone", "Site web", ...(businessId === "copywriting" ? ["Email"] : []), "Mon CRM", "Maps"].map((h) => (
                 <th key={h}>{h}</th>
               ))}
             </tr>
@@ -181,6 +200,54 @@ export function BusinessTable({ businesses, onAddToCRM, onAddAllToCRM, addedIds 
                     ? <a href={b.website} target="_blank" rel="noopener noreferrer" style={{ color: "var(--green)", fontSize: 12, textDecoration: "none" }}>✓ Voir</a>
                     : <span className="badge status-pas_interesse">✗ Aucun</span>}
                 </td>
+
+                {/* Email — Copywriting seulement */}
+                {businessId === "copywriting" && (() => {
+                  const emailState = b.hasWebsite ? scrapedEmails[b.place_id] : null;
+                  const isLoading  = emailState === "loading";
+                  const email      = typeof emailState === "string" && emailState !== "loading" ? emailState : null;
+                  const notFound   = !b.hasWebsite || (emailState === null && b.hasWebsite);
+                  return (
+                    <td style={{ whiteSpace: "nowrap", minWidth: 160 }}>
+                      {isLoading && (
+                        <span style={{ fontSize: 11, color: "var(--muted)", display: "flex", alignItems: "center", gap: 4 }}>
+                          🔍 Recherche…
+                        </span>
+                      )}
+                      {email && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>{email}</span>
+                          <button
+                            onClick={() => sendEmail(b)}
+                            disabled={emailSending[b.place_id]}
+                            style={{
+                              padding: "3px 8px", borderRadius: 6, border: "1px solid rgba(56,189,248,0.4)",
+                              background: "rgba(56,189,248,0.08)", color: "#38bdf8",
+                              fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                              opacity: emailSending[b.place_id] ? 0.6 : 1,
+                            }}
+                          >
+                            {emailSending[b.place_id] ? "…" : "📧 Envoyer un mail"}
+                          </button>
+                        </div>
+                      )}
+                      {notFound && !isLoading && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          <span style={{ fontSize: 11, color: "#f87171" }}>Aucun email</span>
+                          {b.phone && (
+                            <button onClick={() => { navigator.clipboard.writeText(b.phone!); }} style={{
+                              padding: "3px 8px", borderRadius: 6, border: "1px solid rgba(248,113,113,0.3)",
+                              background: "rgba(248,113,113,0.06)", color: "#f87171",
+                              fontSize: 11, fontWeight: 700, cursor: "pointer",
+                            }}>
+                              📞 Appeler
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  );
+                })()}
 
                 {/* Mon CRM */}
                 <td style={{ whiteSpace: "nowrap" }}>
