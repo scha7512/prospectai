@@ -692,13 +692,11 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
                       <>
                         <span style={{ fontSize:12, color:"#4ade80", fontWeight:600 }}>{foundEmail}</span>
                         {entry.status === "email_envoye" ? (
-                          <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-                            <span style={{ fontSize:11, fontWeight:700, color:"#4ade80" }}>✅ Mail envoyé</span>
-                            <button onClick={() => sendEmailDirect(entry, foundEmail, true)} style={{
-                              background:"none", border:"none", padding:0, cursor:"pointer",
-                              fontSize:10, color:"var(--muted)", textDecoration:"underline", textAlign:"left",
-                            }}>Renvoyer</button>
-                          </div>
+                          <button onClick={() => sendEmailDirect(entry, foundEmail, true)} style={{
+                            padding:"4px 10px", borderRadius:8, border:"1px solid rgba(74,222,128,0.4)",
+                            background:"rgba(74,222,128,0.1)", color:"#4ade80",
+                            fontSize:11, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0,
+                          }}>✅ Mail envoyé</button>
                         ) : (
                           <button
                             onClick={() => sendEmailDirect(entry, foundEmail)}

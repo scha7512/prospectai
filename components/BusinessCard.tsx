@@ -221,13 +221,11 @@ export function BusinessTable({ businesses, onAddToCRM, onAddAllToCRM, addedIds,
                         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                           <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>{email}</span>
                           {mailSentIds.has(b.place_id) ? (
-                            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                              <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80" }}>✅ Mail envoyé</span>
-                              <button onClick={() => { setMailSentIds((p) => { const n = new Set(p); n.delete(b.place_id); return n; }); sendEmail(b, true); }} style={{
-                                background: "none", border: "none", padding: 0, cursor: "pointer",
-                                fontSize: 10, color: "var(--muted)", textDecoration: "underline", textAlign: "left",
-                              }}>Renvoyer</button>
-                            </div>
+                            <button onClick={() => sendEmail(b, true)} style={{
+                              padding: "3px 8px", borderRadius: 6, border: "1px solid rgba(74,222,128,0.4)",
+                              background: "rgba(74,222,128,0.1)", color: "#4ade80",
+                              fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                            }}>✅ Mail envoyé</button>
                           ) : (
                             <button
                               onClick={() => sendEmail(b)}
