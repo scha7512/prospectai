@@ -240,7 +240,8 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
     } catch { /* silencieux */ }
   };
 
-  const sendEmailDirect = async (entry: EntryWithId, email: string) => {
+  const sendEmailDirect = async (entry: EntryWithId, email: string, force = false) => {
+    if (entry.status === "email_envoye" && !force) return;
     setEmailSendingDirect((p) => ({ ...p, [entry.id]: true }));
     try {
       const sector = entry.business.types?.[0] || "";
@@ -251,6 +252,9 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
       const { subject, body } = await r.json();
       const gmailUrl = `https://mail.google.com/mail/?authuser=tantonsacha@gmail.com&view=cm&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       window.open(gmailUrl, "_blank");
+      // Mettre à jour le statut vers email_envoye
+      setEntries((p) => p.map((e) => e.id === entry.id ? { ...e, status: "email_envoye" } : e));
+      await patchRaw(entry.id, { status: "email_envoye" });
     } catch { /* silencieux */ }
     finally { setEmailSendingDirect((p) => ({ ...p, [entry.id]: false })); }
   };
@@ -687,17 +691,27 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
                     {foundEmail && (
                       <>
                         <span style={{ fontSize:12, color:"#4ade80", fontWeight:600 }}>{foundEmail}</span>
-                        <button
-                          onClick={() => sendEmailDirect(entry, foundEmail)}
-                          disabled={emailSendingDirect[entry.id]}
-                          style={{
-                            padding:"4px 10px", borderRadius:8, border:"1px solid rgba(56,189,248,0.4)",
-                            background:"rgba(56,189,248,0.08)", color:"#38bdf8",
-                            fontSize:11, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0,
-                            opacity: emailSendingDirect[entry.id] ? 0.6 : 1,
-                          }}>
-                          {emailSendingDirect[entry.id] ? "…" : "📧 Envoyer un mail"}
-                        </button>
+                        {entry.status === "email_envoye" ? (
+                          <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                            <span style={{ fontSize:11, fontWeight:700, color:"#4ade80" }}>✅ Mail envoyé</span>
+                            <button onClick={() => sendEmailDirect(entry, foundEmail, true)} style={{
+                              background:"none", border:"none", padding:0, cursor:"pointer",
+                              fontSize:10, color:"var(--muted)", textDecoration:"underline", textAlign:"left",
+                            }}>Renvoyer</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => sendEmailDirect(entry, foundEmail)}
+                            disabled={emailSendingDirect[entry.id]}
+                            style={{
+                              padding:"4px 10px", borderRadius:8, border:"1px solid rgba(56,189,248,0.4)",
+                              background:"rgba(56,189,248,0.08)", color:"#38bdf8",
+                              fontSize:11, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0,
+                              opacity: emailSendingDirect[entry.id] ? 0.6 : 1,
+                            }}>
+                            {emailSendingDirect[entry.id] ? "…" : "📧 Envoyer un mail"}
+                          </button>
+                        )}
                       </>
                     )}
                     {notFound && (

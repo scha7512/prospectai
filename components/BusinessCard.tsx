@@ -30,10 +30,12 @@ export function BusinessTable({ businesses, onAddToCRM, onAddAllToCRM, addedIds,
   const [sending, setSending] = useState(false);
   const [sendMsg, setSendMsg] = useState("");
   const [emailSending, setEmailSending] = useState<Record<string, boolean>>({});
+  const [mailSentIds, setMailSentIds]   = useState<Set<string>>(new Set());
 
-  const sendEmail = async (b: Business) => {
+  const sendEmail = async (b: Business, force = false) => {
     const email = scrapedEmails[b.place_id];
     if (!email || email === "loading") return;
+    if (mailSentIds.has(b.place_id) && !force) return;
     setEmailSending((p) => ({ ...p, [b.place_id]: true }));
     try {
       const r = await fetch("/api/crm/email/generate", {
@@ -43,6 +45,7 @@ export function BusinessTable({ businesses, onAddToCRM, onAddAllToCRM, addedIds,
       const { subject, body } = await r.json();
       const gmailUrl = `https://mail.google.com/mail/?authuser=tantonsacha@gmail.com&view=cm&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       window.open(gmailUrl, "_blank");
+      setMailSentIds((p) => new Set([...p, b.place_id]));
     } catch { /* silencieux */ }
     finally { setEmailSending((p) => ({ ...p, [b.place_id]: false })); }
   };
@@ -217,18 +220,28 @@ export function BusinessTable({ businesses, onAddToCRM, onAddAllToCRM, addedIds,
                       {email && (
                         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                           <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>{email}</span>
-                          <button
-                            onClick={() => sendEmail(b)}
-                            disabled={emailSending[b.place_id]}
-                            style={{
-                              padding: "3px 8px", borderRadius: 6, border: "1px solid rgba(56,189,248,0.4)",
-                              background: "rgba(56,189,248,0.08)", color: "#38bdf8",
-                              fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
-                              opacity: emailSending[b.place_id] ? 0.6 : 1,
-                            }}
-                          >
-                            {emailSending[b.place_id] ? "…" : "📧 Envoyer un mail"}
-                          </button>
+                          {mailSentIds.has(b.place_id) ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: "#4ade80" }}>✅ Mail envoyé</span>
+                              <button onClick={() => { setMailSentIds((p) => { const n = new Set(p); n.delete(b.place_id); return n; }); sendEmail(b, true); }} style={{
+                                background: "none", border: "none", padding: 0, cursor: "pointer",
+                                fontSize: 10, color: "var(--muted)", textDecoration: "underline", textAlign: "left",
+                              }}>Renvoyer</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => sendEmail(b)}
+                              disabled={emailSending[b.place_id]}
+                              style={{
+                                padding: "3px 8px", borderRadius: 6, border: "1px solid rgba(56,189,248,0.4)",
+                                background: "rgba(56,189,248,0.08)", color: "#38bdf8",
+                                fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                                opacity: emailSending[b.place_id] ? 0.6 : 1,
+                              }}
+                            >
+                              {emailSending[b.place_id] ? "…" : "📧 Envoyer un mail"}
+                            </button>
+                          )}
                         </div>
                       )}
                       {notFound && !isLoading && (
