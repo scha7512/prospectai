@@ -249,7 +249,7 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
         body: JSON.stringify({ businessName: entry.business.name, sector, analyse_result: entry.analyse_result }),
       });
       const { subject, body } = await r.json();
-      const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      const gmailUrl = `https://mail.google.com/mail/?authuser=tantonsacha@gmail.com&view=cm&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       window.open(gmailUrl, "_blank");
     } catch { /* silencieux */ }
     finally { setEmailSendingDirect((p) => ({ ...p, [entry.id]: false })); }
@@ -419,7 +419,7 @@ export default function CRMPage({ businessId = "gensite" }: { businessId?: strin
             ) : emailModal.email_generated ? (() => {
               const eg = emailModal.email_generated!;
               const prospectEmail = emailModal.prospect_email || emailInputs[emailModal.id] || "";
-              const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(prospectEmail)}&su=${encodeURIComponent(eg.subject)}&body=${encodeURIComponent(eg.body)}`;
+              const gmailUrl = `https://mail.google.com/mail/?authuser=tantonsacha@gmail.com&view=cm&to=${encodeURIComponent(prospectEmail)}&su=${encodeURIComponent(eg.subject)}&body=${encodeURIComponent(eg.body)}`;
               return (
                 <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
                   {/* Objet */}

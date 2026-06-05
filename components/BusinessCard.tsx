@@ -41,7 +41,7 @@ export function BusinessTable({ businesses, onAddToCRM, onAddAllToCRM, addedIds,
         body: JSON.stringify({ businessName: b.name, sector: b.types[0] }),
       });
       const { subject, body } = await r.json();
-      const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      const gmailUrl = `https://mail.google.com/mail/?authuser=tantonsacha@gmail.com&view=cm&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       window.open(gmailUrl, "_blank");
     } catch { /* silencieux */ }
     finally { setEmailSending((p) => ({ ...p, [b.place_id]: false })); }
